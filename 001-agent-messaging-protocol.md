@@ -4,18 +4,19 @@
 **Authors**: Ryan Cooper, Jason Apple Huang  
 **Created**: 2026-02-04  
 **Updated**: 2026-02-06  
-**Version**: 0.30
+**Version**: 0.33
 
 ---
 
 ## Abstract
 
 AMP (Agent Messaging Protocol) is a native communication protocol designed for the AI Agent ecosystem.
+This document is the AMP Full entry specification; AMP Core is a strict subset for minimal interoperability.
 
 **Core Positioning**:
-- 🎯 **Goal**: Native messaging protocol for AI Agent ecosystem
-- ⚡ **Features**: Binary, efficient, agent-to-agent communication, capability invocation, document/credential exchange
-- 🔗 **Position**: Standalone protocol (not a DIDComm profile)
+- **Goal**: Native messaging protocol for AI Agent ecosystem
+- **Features**: Binary, efficient, agent-to-agent communication, capability invocation, document/credential exchange
+- **Position**: Standalone protocol (not a DIDComm profile)
 
 ## Table of Contents
 
@@ -99,6 +100,29 @@ Conformance profiles:
 - `AMP Core`: Envelope/security/handshake/error/ack behavior defined in this RFC.
 - `AMP Full`: AMP Core plus document/credential/delegation application flows in this RFC and companion RFCs.
 
+### 1.5.1 Profile Matrix
+
+| Section | AMP Core | AMP Full | Notes |
+|---------|----------|----------|-------|
+| §1 Problem Statement / §2 Requirements | Informative | Informative | Scope and goals |
+| §3 Protocol Layers | MUST | MUST | Processing model |
+| §4 Message Format (CBOR) | MUST | MUST | Envelope, type codes, core schemas |
+| §5 Capability Invocation | Optional | MUST | Normative details in RFC 004 |
+| §6 Document Exchange | Optional | MUST | Inline + streaming semantics |
+| §7 Credential Exchange | Optional | MUST | VC exchange semantics |
+| §8 Security Considerations | MUST | MUST | Signing/encryption/verification |
+| §9 Agentries Integration (AMP Discovery) | Optional | Optional | Semantics in RFC 008 |
+| §10 Presence & Status | Optional | Optional | Semantics in RFC 008 |
+| §11 Provisional Responses | Optional | Optional | Semantics in RFC 006 |
+| §12 Capability Namespacing & Versioning | Optional | MUST | Normative details in RFC 004 |
+| §13 Protocol Version Negotiation | MUST | MUST | HELLO flow and mapping |
+| §14 Interoperability | Informative | Informative | Ecosystem guidance |
+| §15 Error Codes | MUST | MUST | Error taxonomy and handling |
+| §16 Acknowledgment Semantics | MUST | MUST | ACK/PROC/idempotency rules |
+| §17 Registry Governance | SHOULD | SHOULD | Allocation and registration process |
+| Appendix A Test Vectors | MUST (core vectors) | MUST (full vectors) | Acceptance evidence |
+| Appendix B Implementation Notes | Informative | Informative | Non-normative guidance |
+
 ### 1.6 Terminology
 
 - **Agent**: An autonomous or human-delegated software entity identified by a DID and capable of sending/receiving AMP messages.
@@ -156,23 +180,24 @@ The requirements below describe the full AMP target. For strict `AMP Core` confo
 
 ## 3. Protocol Layers
 
-AMP adopts a three-layer architecture (inspired by MTProto):
+AMP adopts a message-centric three-layer architecture (inspired by MTProto):
 
 ```
 ┌─────────────────────────────────────────┐
-│  Layer 3: Application                   │
-│  (Capability invocation, document       │
-│   exchange, credential exchange)        │
+│  Layer 3: Application Semantics         │
+│  (MESSAGE/REQUEST/RESPONSE, CAP_*,      │
+│   DOC_*, CRED_*, DELEG_*)               │
 ├─────────────────────────────────────────┤
-│  Layer 2: Security                      │
-│  (Signing, encryption, authentication)  │
+│  Layer 2: AMP Message Core              │
+│  (Envelope, deterministic CBOR,         │
+│   signature/encryption, ACK/ERROR)      │
 ├─────────────────────────────────────────┤
-│  Layer 1: Transport                     │
-│  (HTTP, WebSocket, TCP, Relay...)       │
+│  Layer 1: Transport Bindings            │
+│  (HTTP, WebSocket, TCP, Relay/MQ)       │
 └─────────────────────────────────────────┘
 ```
 
-### 3.1 Transport Layer
+### 3.1 Layer 1: Transport Bindings
 
 Transport-agnostic design:
 
@@ -184,20 +209,19 @@ Transport-agnostic design:
 | Message Queue | Decoupled, reliable |
 | Relay Network | Offline support, routing |
 
-### 3.2 Security Layer
+### 3.2 Layer 2: AMP Message Core
 
-**Signing (Required)**:
-- Algorithm: Ed25519
-- Input: Sig_Input structure (see §8.1 for exact definition)
-- Verification: Obtain public key via DID Document, reconstruct Sig_Input, verify
-- **Note**: For encrypted messages (`enc` present), recipients MUST decrypt first, then verify signature (see §8.6)
+Layer 2 is the protocol center and defines behavior independent of transport or application domain:
 
-**Encryption (Optional)**:
-- Algorithm: X25519-XSalsa20-Poly1305 (NaCl box)
-- Profile:
-  - `authcrypt`: Authenticated encryption using sender static key agreement key
+- **Envelope**: `v`, `id`, `typ`, `ts`, `ttl`, `from`, `to`, `reply_to`, `thread_id`, `sig` (see §4.1).
+- **Encoding**: deterministic CBOR for signing and verification (see §8.1, §8.2).
+- **Security**: Ed25519 signatures and optional `authcrypt` encryption (see §8.5, §8.6).
+- **Reliability semantics**: ACK/PROC/ERROR, idempotency, retry, and persistence rules (see §15, §16).
+- **Version safety**: major-version negotiation and unsupported-version handling (see §13).
 
-### 3.3 Application Layer
+### 3.3 Layer 3: Application Semantics
+
+Layer 3 maps message types to business meaning. These semantics are carried inside Layer 2 message bodies:
 
 Message type categories:
 
@@ -209,6 +233,24 @@ Message type categories:
 | **Document** | DOC_SEND, DOC_REQUEST | Document exchange |
 | **Credential** | CRED_ISSUE, CRED_REQUEST, CRED_VERIFY | Credential exchange |
 | **Delegation** | DELEG_GRANT, DELEG_REVOKE | Delegation management |
+
+### 3.4 Message Lifecycle
+
+```
+Application object
+  -> construct AMP envelope + body
+  -> deterministic CBOR(body)
+  -> sign Sig_Input
+  -> optional authcrypt encryption
+  -> CBOR encode amp-message
+  -> send via transport binding
+  -> receive + decode
+  -> decrypt (if enc) + verify signature
+  -> process typ/body semantics
+  -> emit ACK/PROC/ERROR as needed
+```
+
+This lifecycle is the canonical processing order for interoperable implementations.
 
 ---
 
@@ -253,8 +295,8 @@ message-id = bstr .size 16
 encrypted-payload = {
   alg: "X25519-XSalsa20-Poly1305",
   mode: "authcrypt",
-  nonce: bstr,                ; Nonce (XSalsa20-Poly1305)
-  ciphertext: bstr            ; Encrypted deterministic_cbor(body)
+  nonce: bstr .size 24,       ; XSalsa20 nonce
+  ciphertext: bstr            ; NaCl secretbox output: poly1305_tag || ciphertext
 }
 
 did = tstr  ; DID string or DID URL (optional key fragment)
@@ -269,6 +311,7 @@ did = tstr  ; DID string or DID URL (optional key fragment)
 - `body` is REQUIRED for unencrypted messages. If there is no payload, use CBOR `null` (`0xF6`).
 - `enc` and `body` are mutually exclusive. Encrypted messages MUST omit `body`; `enc.ciphertext` MUST encrypt `deterministic_cbor(body)` (see §8.6).
 - `enc.mode` is fixed to `"authcrypt"` in AMP 001.
+- `enc.nonce` MUST be 24 bytes and unique for each encryption under the same sender/recipient key pair.
 - `body` MUST be encoded using **deterministic CBOR** (RFC 8949 §4.2) for signing; for unencrypted messages, verifiers MUST re-encode body deterministically before verification; for encrypted messages, verifiers use decrypted bytes directly (see §8.2).
 - `ext` is NOT signed — treat as untrusted (see §8.7 for security implications).
 
@@ -565,6 +608,11 @@ batch-body = {
 Capability discovery, invocation semantics, and compatibility rules are defined in **RFC 004**.
 This RFC only reserves message types (`CAP_QUERY`, `CAP_DECLARE`, `CAP_INVOKE`, `CAP_RESULT`) and their numeric codes.
 
+**Boundary Contract (Normative)**:
+- AMP Core implementations MAY ignore CAP_* semantics, but MUST preserve type-code handling and error behavior in §15.
+- AMP Full implementations MUST implement CAP_* semantics defined in RFC 004.
+- Capability validation errors MUST map to §15.3 client errors (`4002`, `4003`, `4004`) unless a stricter RFC 004 rule applies.
+
 See: `004-capability-schema-registry.md`
 
 ---
@@ -720,6 +768,31 @@ Compatible with W3C Verifiable Credentials:
   }
 }
 ```
+
+### 7.1 Delegation Exchange
+
+Delegation messages carry authorization artifacts and revocation signals across agents.
+
+Message types:
+- `DELEG_GRANT` (0x50): send delegation credential and optional scope/expiry.
+- `DELEG_REVOKE` (0x51): revoke an existing delegation by ID.
+- `DELEG_QUERY` (0x52): query current status of a delegation.
+
+Validation rules (MUST):
+- `DELEG_GRANT.body.credential` MUST be present and parseable by the recipient policy engine.
+- If `expires` is present, recipients MUST reject expired grants with `3004 DELEGATION_INVALID`.
+- `DELEG_REVOKE` and `DELEG_QUERY` MUST include non-empty `delegation_id`.
+- Delegation decisions MUST be based on signed body content only (never `ext`).
+
+Processing behavior:
+- On valid `DELEG_GRANT`, recipient records grant and returns `PROC_OK` (or `PROC_FAIL` with details).
+- On valid `DELEG_REVOKE`, recipient marks grant revoked and MUST reject future use.
+- `DELEG_QUERY` returns current status via `RESPONSE` or `PROC_FAIL` for unknown/invalid IDs.
+
+Error mapping:
+- Invalid/expired delegation artifact: `3004 DELEGATION_INVALID`.
+- Missing required fields: `1001 INVALID_MESSAGE`.
+- Unauthorized sender for delegation action: `3001 UNAUTHORIZED`.
 
 ---
 
@@ -899,6 +972,15 @@ AMP 001 defines a single encryption profile: `authcrypt`.
 3. Compute shared secret and derive the same symmetric key.
 4. Decrypt ciphertext, then continue with signature verification (§8.6).
 
+### 8.5.2 Byte-Level Parameters (Normative)
+
+- `enc.alg` MUST equal `X25519-XSalsa20-Poly1305`; other values MUST be rejected with `1001 INVALID_MESSAGE`.
+- `enc.mode` MUST equal `authcrypt`; other values MUST be rejected with `1001 INVALID_MESSAGE`.
+- `nonce` MUST be exactly 24 bytes.
+- `ciphertext` MUST be NaCl secretbox output encoded as `poly1305_tag(16 bytes) || encrypted_payload`.
+- X25519 public keys in DID documents MUST be raw 32-byte RFC 7748 u-coordinate encoding.
+- Senders MUST NOT reuse nonce under the same derived symmetric key.
+
 ### 8.6 Sign-Then-Encrypt
 
 **Design Choice**: AMP uses **sign-then-encrypt** (StE) — the signature covers the plaintext body, then the body is encrypted.
@@ -961,6 +1043,8 @@ AMP 001 defines a single encryption profile: `authcrypt`.
 
 | Failure | Error Code | Description |
 |---------|------------|-------------|
+| Unsupported `enc.alg` / `enc.mode` | 1001 INVALID_MESSAGE | Encryption profile not supported by AMP 001 |
+| Invalid nonce length | 1001 INVALID_MESSAGE | `nonce` is not 24 bytes |
 | Decryption fails | 3001 UNAUTHORIZED | Invalid ciphertext, wrong key, corrupted data (see §15.3 privacy note) |
 | Sig_Input reconstruction fails | 1001 INVALID_MESSAGE | Missing required fields in message headers |
 | Signature verification fails | 1002 INVALID_SIGNATURE | Invalid signature, wrong public key, tampered content |
@@ -1034,6 +1118,10 @@ To reduce cross-implementation ambiguity, key selection MUST follow these rules.
 Discovery, contactability, and directory semantics are defined in **RFC 008**.
 This RFC reserves CONTACT and PRESENCE message types but does not specify discovery workflows.
 
+**Boundary Contract (Normative)**:
+- Implementations that emit CONTACT_* or PRESENCE_* messages MUST follow RFC 008 payload semantics.
+- Implementations that do not support RFC 008 semantics MUST respond with `1005 UNKNOWN_TYPE` or a more specific error when configured to reject these types.
+
 See: `008-agent-discovery-directory.md`
 
 ---
@@ -1041,6 +1129,10 @@ See: `008-agent-discovery-directory.md`
 ## 10. Presence & Status
 
 Presence semantics are defined in **RFC 008**.
+
+**Boundary Contract (Normative)**:
+- Presence data is optional in AMP Core.
+- If supported, presence values MUST be treated as advisory signals and MUST NOT override signed authorization or delegation checks.
 
 See: `008-agent-discovery-directory.md`
 
@@ -1050,6 +1142,10 @@ See: `008-agent-discovery-directory.md`
 
 Provisional response semantics (`PROCESSING`, `PROGRESS`, `INPUT_REQUIRED`) are defined in **RFC 006**.
 
+**Boundary Contract (Normative)**:
+- AMP Core implementations MAY omit provisional responses.
+- If implemented, provisional messages MUST reference the in-flight request using `reply_to` and follow RFC 006 state rules.
+
 See: `006-session-protocol.md`
 
 ---
@@ -1057,6 +1153,10 @@ See: `006-session-protocol.md`
 ## 12. Capability Namespacing & Versioning
 
 Capability identifiers, versioning, and schema registry details are defined in **RFC 004**.
+
+**Boundary Contract (Normative)**:
+- AMP Full implementations MUST validate capability identifiers and version compatibility according to RFC 004.
+- Unknown capability namespace/version combinations SHOULD map to `4002` or `4003`.
 
 See: `004-capability-schema-registry.md`
 
@@ -1142,6 +1242,10 @@ SELECT
 ## 14. Interoperability
 
 Ecosystem interoperability guidance (A2A/MCP bridges) is defined in **RFC 008**.
+
+**Boundary Contract (Normative)**:
+- Bridges MUST preserve signed AMP message semantics end-to-end.
+- Any bridge-level metadata MUST remain outside signed AMP fields unless explicitly modeled in body schemas.
 
 See: `008-agent-discovery-directory.md`
 
@@ -1406,6 +1510,7 @@ On no response within timeout:
 - [CBOR (RFC 8949)](https://www.rfc-editor.org/rfc/rfc8949.html)
 - [CDDL (RFC 8610)](https://www.rfc-editor.org/rfc/rfc8610.html)
 - [Ed25519 (RFC 8032)](https://www.rfc-editor.org/rfc/rfc8032.html)
+- [Elliptic Curves for Security (RFC 7748)](https://www.rfc-editor.org/rfc/rfc7748.html)
 - [COSE (RFC 9052)](https://www.rfc-editor.org/rfc/rfc9052.html)
 
 ### 19.2 Informative References
@@ -1618,6 +1723,69 @@ These vectors are defined as mutations over the positive vectors above.
 | N4 | Change `typ` in `A.2` from `0x70` to unassigned value | Reject with `1005 UNKNOWN_TYPE` |
 | N5 | In `A.4` ACK, set `ack_source = "relay"` while `from` is not a trusted relay DID | Reject as protocol error (recommended `1001 INVALID_MESSAGE`) |
 
+### A.8 Vector 6: CRED_PRESENT
+
+- ts: `1707055205000`
+- id: `0000018d746b4a880000000000000008`
+- typ: `0x42`
+- body_cbor:
+```
+a366666f726d6174666a77745f766367707572706f73656e6964656e746974795f70726f6f666a63726564656e7469616c785065794a68624763694f694a465a45525451534a392e65794a7a645749694f694a6b61575136643256694f6d56345957317762475575593239744f6d466e5a5735304f6d467361574e6c496e302e736967
+```
+
+Sig_Input (hex):
+```
+8466414d502d763140a6626964500000018d746b4a88000000000000000862746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b4a886374746c1a05265c006374797018426466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c6963655883a366666f726d6174666a77745f766367707572706f73656e6964656e746974795f70726f6f666a63726564656e7469616c785065794a68624763694f694a465a45525451534a392e65794a7a645749694f694a6b61575136643256694f6d56345957317762475575593239744f6d466e5a5735304f6d467361574e6c496e302e736967
+```
+
+Signature (hex):
+```
+1e3287dedf89b908eff823d7c21f7d68503675d2e6c5237f3eac8d92afb58633f6330f537415d05bd8ddc0dc2205e7fc8d26c0f39f45b648e12eea46709f1606
+```
+
+Message (hex):
+```
+a9617601626964500000018d746b4a88000000000000000862746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b4a886373696758401e3287dedf89b908eff823d7c21f7d68503675d2e6c5237f3eac8d92afb58633f6330f537415d05bd8ddc0dc2205e7fc8d26c0f39f45b648e12eea46709f16066374746c1a05265c0063747970184264626f6479a366666f726d6174666a77745f766367707572706f73656e6964656e746974795f70726f6f666a63726564656e7469616c785065794a68624763694f694a465a45525451534a392e65794a7a645749694f694a6b61575136643256694f6d56345957317762475575593239744f6d466e5a5735304f6d467361574e6c496e302e7369676466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c696365
+```
+
+### A.9 Vector 7: DELEG_GRANT
+
+- ts: `1707055206000`
+- id: `0000018d746b4e700000000000000009`
+- typ: `0x50`
+- body_cbor:
+```
+a36573636f7065a16c6361706162696c697469657382686361702e72656164696361702e7772697465676578706972657374323032362d31322d33315432333a35393a35395a6a63726564656e7469616ca36269646964656c65672d30303166697373756572781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c696365677375626a656374781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f62
+```
+
+Sig_Input (hex):
+```
+8466414d502d763140a6626964500000018d746b4e70000000000000000962746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b4e706374746c1a05265c006374797018506466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c69636558aea36573636f7065a16c6361706162696c697469657382686361702e72656164696361702e7772697465676578706972657374323032362d31322d33315432333a35393a35395a6a63726564656e7469616ca36269646964656c65672d30303166697373756572781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c696365677375626a656374781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f62
+```
+
+Signature (hex):
+```
+1310b69203a2eb3c52444e564c8bba1b238f6195f564453a0d53bc041f3bc376f88bd8d36f2dff67d0a436c00409108ad7b70b7e9f49d9f7ae384d18fc47d606
+```
+
+Message (hex):
+```
+a9617601626964500000018d746b4e70000000000000000962746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b4e706373696758401310b69203a2eb3c52444e564c8bba1b238f6195f564453a0d53bc041f3bc376f88bd8d36f2dff67d0a436c00409108ad7b70b7e9f49d9f7ae384d18fc47d6066374746c1a05265c0063747970185064626f6479a36573636f7065a16c6361706162696c697469657382686361702e72656164696361702e7772697465676578706972657374323032362d31322d33315432333a35393a35395a6a63726564656e7469616ca36269646964656c65672d30303166697373756572781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c696365677375626a656374781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c696365
+```
+
+### A.10 Full Profile Coverage Matrix
+
+| Area | Minimum Vector Set | Source |
+|------|---------------------|--------|
+| Core envelope/signature | A.2, A.3 | RFC 001 |
+| Streaming/documents | A.5 | RFC 001 |
+| Encryption | A.6 + N3 | RFC 001 |
+| Credentials | A.8 | RFC 001 |
+| Delegation | A.9 | RFC 001 |
+| Capability semantics | RFC004 capability vectors | RFC 004 |
+| Provisional responses | RFC006 session vectors | RFC 006 |
+| Discovery/presence/contact | RFC008 discovery vectors | RFC 008 |
+
 ---
 
 ## Appendix B. Implementation Notes
@@ -1671,3 +1839,6 @@ Versioning note: public version numbers were reset on 2026-02-06 for external pu
 | 2026-02-06 | 0.28 | 5.17 | Nowa | Added conformance criteria and test vectors/implementation notes for AMP Core |
 | 2026-02-06 | 0.29 | 5.18 | Nowa | Clarified authcrypt/anoncrypt byte-level profiles and verification steps; added DID key selection policy; fixed ACK section markdown; added negative test vectors and test DID mapping note |
 | 2026-02-06 | 0.30 | 5.19 | Nowa | Simplified AMP 001 to a single encryption profile (`authcrypt`); removed anoncrypt-specific rules; updated encrypted test vector to authcrypt |
+| 2026-02-06 | 0.31 | 5.20 | Nowa | Refined Section 3 to a message-centric layer model; added explicit AMP message core responsibilities and lifecycle |
+| 2026-02-06 | 0.32 | 5.21 | Nowa | Positioned 001 as AMP Full entry spec with AMP Core subset; added profile matrix and chapter-level conformance mapping |
+| 2026-02-06 | 0.33 | 5.22 | Nowa | Added delegation exchange semantics, strengthened encryption byte-level rules, added boundary contracts for external sections, and expanded vectors for credential/delegation coverage |

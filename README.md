@@ -25,7 +25,7 @@ Note: **Accepted** indicates implementation-ready specifications (byte-accurate 
 
 | RFC | Title | Status | Author | Last Updated |
 |-----|-------|--------|--------|--------------|
-| 001 | [Agent Messaging Protocol (AMP Core)](001-agent-messaging-protocol.md) | **Draft v0.30** | Ryan Cooper, Jason Huang | 2026-02-06 |
+| 001 | [Agent Messaging Protocol (AMP Core)](001-agent-messaging-protocol.md) | **Draft v0.33 (Full Entry, Core Profile defined)** | Ryan Cooper, Jason Huang | 2026-02-06 |
 | 002 | [Transport Bindings (HTTP/WS/MQ)](002-transport-bindings.md) | Draft v0.3 | Ryan Cooper | 2026-02-05 |
 | 003 | [Relay & Store-and-Forward](003-relay-store-and-forward.md) | Planned (Future) | - | 2026-02-06 |
 | 004 | [Capability Schema Registry & Compatibility](004-capability-schema-registry.md) | Draft (Early) | - | 2026-02-06 |
