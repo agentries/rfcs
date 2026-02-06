@@ -1,10 +1,10 @@
-# RFC 002: AMP Transport Bindings
+# RFC 002: Transport Bindings (TCP-first, HTTP/WS mappings)
 
-**Status**: Draft  
-**Authors**: Ryan Cooper  
-**Created**: 2026-02-05  
-**Updated**: 2026-02-05  
-**Version**: 0.3
+**Status**: Draft
+**Authors**: Ryan Cooper, Nowa
+**Created**: 2026-02-05
+**Updated**: 2026-02-06
+**Version**: 0.6
 
 ---
 
@@ -13,781 +13,513 @@
 **Depends On:**
 - RFC 001: Agent Messaging Protocol (Core)
 
-**Enables:**
-- RFC 003: Relay & Store-and-Forward
+**Related:**
+- RFC 003: Relay and Store-and-Forward (persistence and queue policy)
 
 ---
 
 ## Abstract
 
-This specification defines how AMP messages (RFC 001) are transmitted over common transport protocols. It covers WebSocket, TCP, and HTTP bindings, including connection establishment, message framing, authentication, and error handling at the transport layer.
-
-AMP is transport-agnostic by design. This document provides concrete bindings to enable interoperable implementations.
+This RFC defines AMP transport bindings with a TCP-first normative model. AMPS (TCP over TLS) is the canonical binding used to define framing, handshake, ordering, and transport error behavior. WebSocket and HTTP bindings are specified as normative mappings to the same canonical semantics. The goal is high-performance interoperability without transport-specific semantic drift.
 
 ---
 
-## 1. Introduction
+## Table of Contents
+
+1. Scope and Non-Goals
+2. Conformance and Profiles
+2.1 Terminology
+2.2 Role Profiles and MTI Requirements
+3. Canonical Transport Semantics (TCP-first)
+3.1 Connection and Handshake
+3.2 Frame Model and Limits
+3.3 AMP Version Negotiation Sequencing
+3.4 ACK Boundary and Delivery Semantics
+4. AMPS/TCP Binding (Canonical)
+5. WebSocket Mapping to Canonical Semantics
+6. HTTP Mapping to Canonical Semantics
+6.1 Submit Endpoint
+6.2 Polling Wrapper (Normative)
+6.3 Webhook Wrapper (Normative)
+6.4 HTTP Status Mapping
+7. Transport Authentication and DID Binding
+8. Error Handling and Retry
+9. Versioning and Compatibility
+10. Security Considerations
+11. Implementation Checklist
+12. References
+Appendix A. Minimal Test Vectors
+Appendix B. Open Questions
+
+---
+
+## 1. Scope and Non-Goals
 
 ### 1.1 Scope
 
 This RFC defines:
-- **WebSocket Binding**: Persistent bidirectional connection for real-time agent communication
-- **HTTP Binding**: Request-response pattern for simple interactions and webhooks
-- **TCP Binding**: Low-overhead persistent connection for high-performance scenarios
+- How a full CBOR `amp-message` (RFC 001) is carried over TCP, WebSocket, and HTTP.
+- Transport handshake, frame boundaries, size negotiation, and keepalive behavior.
+- Binding-specific error/status mapping to RFC 001 error categories.
+- Conformance requirements for agents and relays.
 
 ### 1.2 Non-Goals
 
-- Relay discovery and federation (→ RFC 003)
-- Message persistence semantics (→ RFC 003)
-- QUIC binding (future RFC)
-- UDP binding (unreliable transport not suitable for AMP)
+This RFC does not define:
+- Relay federation topology, queue retention, or store-and-forward guarantees (RFC 003).
+- Capability/session/discovery/presence semantics (RFC 004/006/008).
+- New AMP message types (all message types remain in RFC 001).
+- QUIC/UDP binding details (future RFC).
 
-### 1.3 Terminology
+---
+
+## 2. Conformance and Profiles
+
+The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, MAY, and OPTIONAL are interpreted as in RFC 2119 and RFC 8174.
+
+A transport implementation is conformant only if it:
+- Satisfies Section 3 common canonical semantics.
+- Satisfies all requirements for each claimed binding section.
+- Preserves RFC 001 message bytes and validation model at protocol boundaries.
+
+### 2.1 Terminology
 
 | Term | Definition |
 |------|------------|
-| **Endpoint** | A network address that accepts AMP messages |
-| **Client** | The party initiating a connection |
-| **Server** | The party accepting connections (agent or relay) |
-| **Frame** | A transport-layer unit containing one AMP message |
-| **Binding** | A specification mapping AMP semantics to a transport protocol |
+| Canonical binding | AMPS/TCP binding used as semantic reference model. |
+| Transport ACK | Confirmation that the next hop accepted transport payload. |
+| Application ACK | AMP `ACK`/`PROC_*` semantics in RFC 001 Section 16. |
+| Transport principal | Identity established by transport auth (token subject, mTLS identity). |
+| Effective max size | `min(sender_max, receiver_max)` bytes. |
 
-### 1.4 Requirements Language
+### 2.2 Role Profiles and MTI Requirements
 
-The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in RFC 2119.
+`Core Agent Profile`:
+- MUST support HTTP `POST /amp/v1/messages` as sender MTI.
+- MUST support at least one receive mode: HTTP polling client or WebSocket client.
+- SHOULD support AMPS client mode when high-throughput/low-latency is required.
 
----
+`Relay Profile`:
+- MUST support AMPS server endpoint.
+- MUST support HTTP `POST /amp/v1/messages` endpoint.
+- MUST support HTTP polling endpoint with the normative wrapper in Section 6.1.
+- SHOULD support WebSocket endpoint.
+- SHOULD support webhook push with the normative wrapper in Section 6.2.
 
-## 2. Common Concepts
-
-### 2.1 Transport vs Application Layer
-
-AMP distinguishes two confirmation levels (RFC 001 §R6):
-
-| Level | Meaning | Who Sends |
-|-------|---------|-----------|
-| **Transport ACK** | Message received by next hop (relay or recipient endpoint) | Transport layer |
-| **Application ACK** | Message processed by recipient agent | Application layer (AMP `ACK` message) |
-
-Transport bindings define **transport ACK** behavior. Application ACK is an AMP message type defined in RFC 001.
-
-### 2.2 Message Framing
-
-AMP messages are CBOR-encoded binary. Transport bindings MUST:
-1. Preserve message boundaries (one frame = one AMP message)
-2. Support messages of at least **1 MiB** (mandatory minimum)
-3. Handle fragmentation transparently if needed
-
-### 2.2.1 Message Size Negotiation
-
-Not all implementations support the same maximum message size:
-
-| Role | Mandatory Minimum | Typical | Notes |
-|------|-------------------|---------|-------|
-| Agent | 1 MiB | 1-16 MiB | Constrained by memory |
-| Relay | 1 MiB | 16-64 MiB | Must handle diverse agents |
-
-**Negotiation mechanism:**
-
-1. **During handshake**: Both parties declare `max_msg_size` they can receive
-2. **Effective limit**: `min(client_max, server_max)`
-3. **Pre-connection hint** (optional): DID Document service metadata
-
-```json
-{
-  "id": "did:web:example.com:agent:xxx#amp",
-  "type": "AgentMessaging",
-  "serviceEndpoint": "wss://agent.example.com/amp/v1/ws",
-  "maxMessageSize": 16777216
-}
-```
-
-**Behavior when limit exceeded:**
-- Sender SHOULD check limit before sending
-- Receiver MUST reject with appropriate error (WebSocket 1009, TCP ERROR frame, HTTP 413)
-- Receiver SHOULD NOT crash or hang on oversized messages
-
-### 2.3 Transport-Layer Authentication
-
-Before exchanging AMP messages, parties MAY authenticate at the transport layer:
-
-| Method | Use Case |
-|--------|----------|
-| **TLS Client Cert** | Mutual TLS with DID-bound certificate |
-| **Bearer Token** | Short-lived tokens for relay access |
-| **DID Auth Challenge** | Prove DID ownership via signed challenge |
-
-Transport auth is OPTIONAL. AMP messages are self-authenticating via signatures (RFC 001 §8).
-
-### 2.4 Connection Lifecycle
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Connection States                     │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  ┌──────────┐    success    ┌─────────────┐            │
-│  │ CONNECTING├──────────────►│ AUTHENTICATED│           │
-│  └─────┬────┘               └──────┬──────┘            │
-│        │                           │                    │
-│        │ failure                   │ ready              │
-│        ▼                           ▼                    │
-│  ┌──────────┐               ┌─────────────┐            │
-│  │  FAILED  │               │    OPEN     │◄───┐       │
-│  └──────────┘               └──────┬──────┘    │       │
-│                                    │           │       │
-│                              error │    reconnect      │
-│                                    ▼           │       │
-│                             ┌─────────────┐    │       │
-│                             │   CLOSED    ├────┘       │
-│                             └─────────────┘            │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
-```
+Rationale: HTTP MTI guarantees minimum cross-vendor interoperability; AMPS canonical semantics guarantee performance and precise transport behavior.
 
 ---
 
-## 3. WebSocket Binding
+## 3. Canonical Transport Semantics (TCP-first)
 
-### 3.1 Overview
+### 3.1 Connection and Handshake
 
-WebSocket provides persistent, bidirectional communication ideal for:
-- Real-time agent-to-agent messaging
-- Agent-to-relay connections
-- Long-running sessions
-
-### 3.2 Connection Establishment
-
-#### 3.2.1 Endpoint URL
-
-WebSocket endpoints SHOULD follow this pattern:
+Canonical state sequence:
 
 ```
-wss://{host}:{port}/amp/v1/ws
+IDLE -> CONNECTED -> HANDSHAKE -> OPEN -> DRAINING -> CLOSED
 ```
 
-- `wss://` REQUIRED for production (TLS)
-- `/amp/v1/` indicates AMP protocol version 1.x
-- `/ws` indicates WebSocket transport
+Requirements:
+- No AMP payload frame may be sent before handshake completion.
+- Handshake timeout is implementation-defined; recommended default is 10 seconds.
+- On handshake failure, endpoint MUST close cleanly.
 
-#### 3.2.2 Subprotocol Negotiation
+### 3.2 Frame Model and Limits
 
-Clients MUST request the `amp.v1` subprotocol:
+Transport MUST preserve AMP boundaries:
+- One transport message unit carries exactly one AMP payload.
+- Sender MUST NOT coalesce multiple AMP payloads in one transport unit.
+- Receiver MUST reject partial/truncated payloads.
 
-```http
-GET /amp/v1/ws HTTP/1.1
-Host: relay.example.com
-Upgrade: websocket
-Connection: Upgrade
-Sec-WebSocket-Protocol: amp.v1
-Sec-WebSocket-Version: 13
-X-AMP-Max-Message-Size: 16777216
-```
+All conformant implementations MUST accept at least 1 MiB inbound payload.
 
-Servers MUST respond with:
+Recommended limits:
+- Agent endpoint: 16 MiB
+- Relay endpoint: 64 MiB
 
-```http
-HTTP/1.1 101 Switching Protocols
-Upgrade: websocket
-Connection: Upgrade
-Sec-WebSocket-Accept: ...
-Sec-WebSocket-Protocol: amp.v1
-X-AMP-Max-Message-Size: 67108864
-```
+### 3.3 AMP Version Negotiation Sequencing
 
-The `X-AMP-Max-Message-Size` header declares the maximum message size (in bytes) each party can receive. If omitted, assume the mandatory minimum (1 MiB).
+RFC 001 `HELLO`/`HELLO_ACK`/`HELLO_REJECT` (Section 13) governs AMP version negotiation.
 
-If `amp.v1` is not supported, server MUST reject with HTTP 400.
+Sequencing rules:
+- For persistent channels (AMPS/WS), after transport handshake completes, non-handshake AMP messages MUST NOT be sent until AMP version is negotiated.
+- For request/response HTTP mode, sender MAY skip explicit HELLO exchange only when using a preconfigured supported AMP major version; recipient MUST still reject unsupported `v` with `1004`.
 
-#### 3.2.3 Authentication During Handshake
+### 3.4 ACK Boundary and Delivery Semantics
 
-Optional transport-layer auth via headers:
+Transport success is not application success.
 
-```http
-GET /amp/v1/ws HTTP/1.1
-Authorization: Bearer <token>
-X-AMP-DID: did:web:agentries.xyz:agent:xxx
-```
-
-Or via query parameters (when headers unavailable):
-
-```
-wss://relay.example.com/amp/v1/ws?token=<token>&did=<did>
-```
-
-### 3.3 Message Framing
-
-#### 3.3.1 Frame Type
-
-AMP messages MUST be sent as **Binary frames** (opcode 0x02).
-
-Text frames (opcode 0x01) MUST NOT be used for AMP messages.
-
-#### 3.3.2 One Message Per Frame
-
-Each WebSocket binary frame MUST contain exactly one complete AMP message (CBOR-encoded).
-
-Implementations MUST NOT:
-- Split one AMP message across multiple frames
-- Combine multiple AMP messages in one frame
-
-WebSocket fragmentation (continuation frames) MAY be used for large messages, but MUST reassemble to exactly one AMP message.
-
-#### 3.3.3 Maximum Message Size
-
-| Party | Minimum Support | Recommended |
-|-------|-----------------|-------------|
-| Agents | 1 MiB | 16 MiB |
-| Relays | 16 MiB | 64 MiB |
-
-Messages exceeding the recipient's limit MUST be rejected with WebSocket close code 1009 (Message Too Big).
-
-### 3.4 Keepalive / Heartbeat
-
-#### 3.4.1 WebSocket Ping/Pong
-
-Both parties SHOULD send WebSocket Ping frames to detect connection health:
-
-| Parameter | Recommendation |
-|-----------|---------------|
-| Ping interval | 30 seconds |
-| Pong timeout | 10 seconds |
-
-If Pong is not received within timeout, the connection SHOULD be considered dead.
-
-#### 3.4.2 AMP-Level Ping (Optional)
-
-For application-level health checks, agents MAY use AMP `PING` message (type 0x10):
-
-```cddl
-ping = {
-  typ: 0x10,
-  from: did,
-  ts: uint,
-  ttl: uint,
-  ? echo: bytes  ; optional payload to echo back
-}
-```
-
-Response is `PONG` (type 0x11):
-
-```cddl
-pong = {
-  typ: 0x11,
-  from: did,
-  ts: uint,
-  ttl: uint,
-  reply_to: msg_id,
-  ? echo: bytes  ; echoed payload
-}
-```
-
-### 3.5 Transport ACK
-
-#### 3.5.1 Implicit ACK
-
-For WebSocket, transport-layer receipt is **implicit**:
-- If the frame is accepted without WebSocket error → transport ACK
-- No separate transport ACK message needed
-
-#### 3.5.2 Relay Receipt Confirmation
-
-Relays MAY send explicit receipt confirmation using AMP `ACK` message with `ack_source: "relay"` (RFC 001 §16).
-
-### 3.6 Error Handling
-
-#### 3.6.1 WebSocket Close Codes
-
-| Code | Meaning | When to Use |
-|------|---------|-------------|
-| 1000 | Normal | Clean shutdown |
-| 1002 | Protocol Error | Invalid frame type, malformed message |
-| 1003 | Unsupported Data | Non-CBOR payload |
-| 1008 | Policy Violation | Auth failure, rate limit |
-| 1009 | Message Too Big | Exceeds size limit |
-| 1011 | Internal Error | Server error |
-| 4000-4999 | AMP-specific | Reserved for AMP errors |
-
-#### 3.6.2 AMP-Specific Close Codes
-
-| Code | Meaning |
-|------|---------|
-| 4001 | Invalid AMP message (CBOR decode failed) |
-| 4002 | Signature verification failed |
-| 4003 | DID resolution failed |
-| 4004 | Message expired (ts + ttl) |
-| 4005 | Unsupported AMP version |
-
-### 3.7 Reconnection
-
-#### 3.7.1 Backoff Strategy
-
-On unexpected disconnect, clients SHOULD reconnect with exponential backoff:
-
-```
-delay = min(initial * 2^attempt, max_delay) + random_jitter
-
-initial = 1 second
-max_delay = 60 seconds
-jitter = 0-1 second (random)
-```
-
-#### 3.7.2 Message Recovery
-
-Unacknowledged messages SHOULD be retransmitted after reconnection:
-- Use AMP message `id` for idempotency (RFC 001 §16)
-- Recipients MUST handle duplicate messages gracefully
+- Transport success indicates next-hop acceptance only.
+- Application confirmation requires RFC 001 `ACK`/`PROC_OK`/`PROC_FAIL`.
+- Relay-emitted `ACK` MUST follow RFC 001 `ack_source` and signature validation rules.
 
 ---
 
-## 4. TCP Binding
+## 4. AMPS/TCP Binding (Canonical)
 
-### 4.1 Overview
+### 4.1 Endpoint and TLS
 
-TCP binding provides the lowest overhead for high-performance scenarios:
-- Relay-to-relay communication
-- High-frequency agent messaging
-- Environments requiring maximum throughput
-
-Unlike WebSocket, TCP binding requires custom framing but avoids HTTP overhead.
-
-### 4.2 Connection Establishment
-
-#### 4.2.1 Endpoint
-
-TCP endpoints use a dedicated port:
+Endpoint URI:
 
 ```
-amp://{host}:{port}
-amps://{host}:{port}  (with TLS)
+amps://{host}:{port}
 ```
 
-Default port: **5710** (AMP = 0x414D50 → 5710 in decimal... or just a memorable number)
+Plain `amp://` MAY be used only in trusted development/private environments.
+Production deployments MUST use TLS 1.2+.
 
-#### 4.2.2 TLS Requirement
-
-Production deployments MUST use TLS 1.2+. The `amps://` scheme indicates TLS.
-
-Plain `amp://` MAY be used for:
-- Local development
-- Already-encrypted tunnels (VPN, WireGuard)
-
-#### 4.2.3 Handshake
-
-After TCP/TLS connection, client sends a handshake frame:
-
-```cddl
-handshake_request = {
-  magic: 0x414D5031,    ; "AMP1" in hex
-  version: uint,        ; Protocol version (1)
-  max_msg_size: uint,   ; Max message size client can receive (bytes)
-  ? did: text,          ; Client DID (optional)
-  ? token: bytes,       ; Auth token (optional)
-  ? extensions: [text]  ; Requested extensions
-}
-```
-
-Server responds:
-
-```cddl
-handshake_response = {
-  magic: 0x414D5031,
-  version: uint,
-  accepted: bool,
-  max_msg_size: uint,   ; Max message size server can receive (bytes)
-  ? error: text,
-  ? extensions: [text]  ; Accepted extensions
-}
-```
-
-If `accepted` is false, server closes the connection after sending response.
-
-### 4.3 Message Framing
-
-TCP is a stream protocol, so we need explicit framing:
-
-#### 4.3.1 Frame Format
+### 4.2 Frame Format
 
 ```
-┌────────────────┬────────────────┬─────────────────────┐
-│  Length (4B)   │  Type (1B)     │  Payload (N bytes)  │
-│  big-endian    │                │                     │
-└────────────────┴────────────────┴─────────────────────┘
+0                   1                   2                   3
+0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-------------------------------+---------------+-----------------
+| length (uint32, big-endian)   | frame_type(1) | payload (N-1)   |
++-------------------------------+---------------+-----------------
 ```
 
-- **Length**: 4 bytes, big-endian, includes type byte (so payload = length - 1)
-- **Type**: 1 byte frame type
-- **Payload**: CBOR-encoded data
+Rules:
+- `length` includes `frame_type + payload` bytes.
+- `length` MUST be >= 1.
+- `length` exceeding effective max MUST be rejected.
 
-#### 4.3.2 Frame Types
+### 4.3 Frame Types
 
 | Type | Name | Payload |
 |------|------|---------|
-| 0x01 | MESSAGE | AMP message (CBOR) |
-| 0x02 | HANDSHAKE | Handshake request/response |
-| 0x03 | PING | Optional echo data |
-| 0x04 | PONG | Echoed data |
-| 0x05 | GOAWAY | Graceful shutdown notice |
-| 0x06 | ERROR | Error details |
+| 0x01 | AMP_MESSAGE | Raw CBOR `amp-message` bytes |
+| 0x02 | HANDSHAKE | CBOR handshake request/response |
+| 0x03 | PING | Opaque bytes |
+| 0x04 | PONG | Echoed bytes |
+| 0x05 | GOAWAY | CBOR goaway object |
+| 0x06 | ERROR | CBOR transport error object |
 
-#### 4.3.3 Maximum Frame Size
+### 4.4 Handshake Payload (CDDL)
 
-| Party | Minimum Support | Recommended |
-|-------|-----------------|-------------|
-| Agents | 1 MiB | 16 MiB |
-| Relays | 16 MiB | 64 MiB |
+```cddl
+handshake-request = {
+  "version": uint,
+  "max_msg_size": uint,
+  ? "did": tstr,
+  ? "token": bstr,
+  ? "extensions": [* tstr]
+}
 
-Frames exceeding limit MUST trigger connection close with ERROR frame.
+handshake-response = {
+  "version": uint,
+  "accepted": bool,
+  "max_msg_size": uint,
+  ? "error": tstr,
+  ? "extensions": [* tstr]
+}
+```
 
-### 4.4 Keepalive
+Rules:
+- Client MUST send `HANDSHAKE` first.
+- Server MUST reply with `HANDSHAKE` before `AMP_MESSAGE`.
+- If `accepted = false`, server SHOULD include `error` and close.
 
-#### 4.4.1 PING/PONG Frames
-
-Either party MAY send PING frames:
-
-| Parameter | Recommendation |
-|-----------|---------------|
-| Ping interval | 30 seconds |
-| Pong timeout | 10 seconds |
-
-PONG MUST echo the PING payload exactly.
-
-#### 4.4.2 Idle Timeout
-
-Connections with no activity for 5 minutes SHOULD be closed.
-
-### 4.5 Graceful Shutdown
-
-#### 4.5.1 GOAWAY Frame
-
-Before closing, sender SHOULD send GOAWAY:
+### 4.5 Control Frames (CDDL)
 
 ```cddl
 goaway = {
-  reason: uint,       ; Reason code
-  ? message: text,    ; Human-readable message
-  ? last_id: bytes    ; Last processed message ID
+  "reason": uint,
+  ? "message": tstr,
+  ? "last_id": bstr .size 16
+}
+
+transport-error = {
+  "code": uint,
+  "message": tstr,
+  ? "msg_id": bstr .size 16
 }
 ```
 
-Reason codes:
-| Code | Meaning |
-|------|---------|
-| 0 | Normal shutdown |
-| 1 | Protocol error |
-| 2 | Internal error |
-| 3 | Overloaded |
-| 4 | Maintenance |
+### 4.6 Graceful Shutdown
 
-#### 4.5.2 Shutdown Sequence
-
-1. Sender sends GOAWAY
-2. Sender stops sending new messages
-3. Sender waits for in-flight responses (with timeout)
-4. Sender closes TCP connection
-
-### 4.6 Error Handling
-
-ERROR frame for non-fatal errors:
-
-```cddl
-error_frame = {
-  code: uint,         ; Error code
-  message: text,      ; Description
-  ? msg_id: bytes     ; Related message ID
-}
-```
-
-Fatal errors → GOAWAY + close.
-
-### 4.7 Multiplexing (Optional Extension)
-
-For high-throughput scenarios, the `multiplex` extension allows multiple logical streams:
-
-```
-┌────────────────┬────────────────┬────────────────┬─────────────────────┐
-│  Length (4B)   │  Type (1B)     │  Stream (2B)   │  Payload (N bytes)  │
-└────────────────┴────────────────┴────────────────┴─────────────────────┘
-```
-
-Stream 0 = control stream (handshake, ping/pong, goaway).
-Streams 1-65535 = message streams.
-
-This is OPTIONAL and requires negotiation during handshake.
+1. Send `GOAWAY`.
+2. Stop accepting new work on this connection.
+3. Drain in-flight work until timeout.
+4. Close connection.
 
 ---
 
-## 5. HTTP Binding
+## 5. WebSocket Mapping to Canonical Semantics
 
-### 4.1 Overview
-
-HTTP binding supports:
-- Simple request-response interactions
-- Webhook-style push notifications
-- Environments where WebSocket is unavailable
-
-### 4.2 Endpoint URL
-
-HTTP endpoints SHOULD follow this pattern:
+### 5.1 Endpoint and Subprotocol
 
 ```
-https://{host}:{port}/amp/v1/messages
+wss://{host}/amp/v1/ws
 ```
 
-### 4.3 Sending Messages (POST)
+Client MUST request `Sec-WebSocket-Protocol: amp.v1`.
+Server MUST select `amp.v1` or reject.
 
-#### 4.3.1 Request
+### 5.2 Mapping Rules
+
+- One WebSocket binary message maps to one canonical `AMP_MESSAGE` frame payload.
+- Text messages MUST be rejected.
+- WebSocket continuation frames MAY be used, but reassembled payload MUST represent exactly one AMP message.
+
+### 5.3 Size and Keepalive
+
+- `X-AMP-Max-Message-Size` headers map to canonical size negotiation.
+- WebSocket Ping/Pong maps to canonical keepalive.
+
+### 5.4 Close/Error Mapping
+
+| Condition | WS Code | Canonical / AMP Hint |
+|----------|---------|----------------------|
+| Normal close | 1000 | clean close |
+| Framing violation | 1002 | transport error -> 1001 |
+| Non-binary payload | 1003 | transport error -> 1001 |
+| Policy/auth failure | 1008 | 3001 / 2003 |
+| Oversize payload | 1009 | size violation -> 1001 |
+| Internal server error | 1011 | 5001 |
+
+---
+
+## 6. HTTP Mapping to Canonical Semantics
+
+### 6.1 Submit Endpoint
 
 ```http
 POST /amp/v1/messages HTTP/1.1
-Host: agent.example.com
-Content-Type: application/cbor
-Content-Length: <length>
-X-AMP-Message-ID: <msg_id>
-
-<CBOR-encoded AMP message>
-```
-
-#### 4.3.2 Response
-
-**Success (message accepted):**
-
-```http
-HTTP/1.1 202 Accepted
-Content-Type: application/cbor
-X-AMP-Message-ID: <msg_id>
-
-<optional: CBOR-encoded AMP ACK or response>
-```
-
-**Synchronous response available:**
-
-```http
-HTTP/1.1 200 OK
-Content-Type: application/cbor
-
-<CBOR-encoded AMP response message>
-```
-
-#### 4.3.3 Status Code Mapping
-
-| HTTP Status | Meaning | AMP Error Code |
-|-------------|---------|----------------|
-| 200 | Sync response included | - |
-| 202 | Accepted for processing | - |
-| 400 | Malformed message | 1001 |
-| 401 | Auth required | 3001 |
-| 403 | Forbidden | 3002 |
-| 404 | Unknown recipient | 2001 |
-| 413 | Message too large | 1003 |
-| 429 | Rate limited | 2003 |
-| 500 | Server error | 4001 |
-| 503 | Temporarily unavailable | 4002 |
-
-### 4.4 Polling for Messages (GET)
-
-Agents without persistent connections MAY poll for pending messages:
-
-```http
-GET /amp/v1/messages?since=<timestamp>&limit=50 HTTP/1.1
 Host: relay.example.com
-Authorization: Bearer <token>
+Content-Type: application/cbor
 Accept: application/cbor
+X-AMP-Transport-Version: 1
+Authorization: Bearer <token>
+
+<raw amp-message bytes>
 ```
 
-Response:
+Rules:
+- Body MUST contain exactly one AMP payload.
+- Server MUST validate message envelope-level constraints before acceptance.
+- Success SHOULD be `202 Accepted` (async) or `200 OK` (sync response body).
+
+### 6.2 Polling Wrapper (Normative)
+
+Relay polling endpoint:
 
 ```http
-HTTP/1.1 200 OK
-Content-Type: application/cbor
+GET /amp/v1/messages?cursor=<opaque>&limit=50 HTTP/1.1
+Accept: application/cbor
+Authorization: Bearer <token>
+```
 
-{
-  "messages": [<array of AMP messages>],
-  "next_cursor": "<cursor for pagination>",
-  "has_more": true
+Polling response CDDL (fixed wrapper):
+
+```cddl
+poll-response = {
+  "messages": [* bstr],       ; each bstr is full raw CBOR amp-message bytes
+  "next_cursor": tstr / null,
+  "has_more": bool
 }
 ```
 
-### 4.5 Webhook Push
+Rules:
+- `messages[i]` MUST be raw AMP bytes (no semantic re-encoding).
+- `next_cursor = null` indicates no further page.
 
-#### 4.5.1 Registration
+### 6.3 Webhook Wrapper (Normative)
 
-Agents register webhook endpoints via DID Document service:
-
-```json
-{
-  "id": "did:web:example.com:agent:xxx#amp-webhook",
-  "type": "AgentMessagingWebhook",
-  "serviceEndpoint": "https://agent.example.com/amp/v1/webhook"
-}
-```
-
-#### 4.5.2 Delivery
-
-Relays POST messages to registered webhooks:
+Relay push:
 
 ```http
 POST /amp/v1/webhook HTTP/1.1
-Host: agent.example.com
 Content-Type: application/cbor
 X-AMP-Relay: did:web:relay.example.com
-X-AMP-Signature: <relay signature over body>
-X-AMP-Timestamp: <unix timestamp>
+X-AMP-Timestamp: 1707055200
+X-AMP-Signature: <relay-signature>
 
-<CBOR-encoded AMP message>
+<CBOR webhook-delivery>
 ```
 
-#### 4.5.3 Webhook Verification
+Webhook payload CDDL (fixed wrapper):
 
-Recipients MUST verify:
-1. `X-AMP-Timestamp` is recent (within 5 minutes)
-2. `X-AMP-Signature` is valid for the relay's DID
-3. AMP message signature is valid (per RFC 001)
-
-### 4.6 Long Polling (Optional)
-
-For near-real-time without WebSocket:
-
-```http
-GET /amp/v1/messages/stream?timeout=30 HTTP/1.1
-Host: relay.example.com
-Authorization: Bearer <token>
+```cddl
+webhook-delivery = {
+  "message": bstr,            ; raw full CBOR amp-message bytes
+  "relay": tstr,
+  "sent_at": uint
+}
 ```
 
-Server holds connection open until:
-- Message available → return immediately
-- Timeout reached → return empty response
-- Connection closed → client reconnects
+Receiver MUST verify:
+- `X-AMP-Timestamp` freshness.
+- `X-AMP-Signature` over timestamp + body.
+- `webhook-delivery.message` as valid AMP payload.
+
+### 6.4 HTTP Status Mapping
+
+| HTTP | Meaning | AMP Hint |
+|------|---------|----------|
+| 200 | Accepted with sync response | none |
+| 202 | Accepted for async path | none |
+| 400 | Malformed payload/wrapper | 1001 |
+| 401 | Missing/invalid auth | 3001 |
+| 403 | Authenticated but not allowed | 3001 |
+| 404 | Unknown route/recipient endpoint | 2001 or 2002 |
+| 413 | Payload too large | 1001 |
+| 429 | Rate/policy rejection | 2003 |
+| 500 | Internal failure | 5001 |
+| 503 | Temporarily unavailable | 2003 |
 
 ---
 
-## 6. Security Considerations
+## 7. Transport Authentication and DID Binding
 
-### 5.1 Transport Security
+### 7.1 Principal Binding Rule
 
-All AMP transport bindings MUST use TLS 1.2 or higher in production.
+Transport auth establishes `transport principal`.
 
-Plain HTTP/WS (`http://`, `ws://`) MAY be used only for local development.
+Default rule (`strict` mode, RECOMMENDED default):
+- `transport principal DID` MUST equal AMP `from` DID.
 
-### 5.2 Authentication Layers
+Optional delegated rule (`act_as` mode):
+- Principal MAY send with a different `from` DID only if auth material explicitly authorizes that DID (for example, token `act_as` claim).
 
-| Layer | Mechanism | Purpose |
-|-------|-----------|---------|
-| Transport | TLS, Bearer tokens | Connection authorization |
-| Message | AMP signatures | Message authenticity |
+### 7.2 Enforcement Requirements
 
-Both layers provide defense in depth:
-- Transport auth enables rate limiting, access control
-- Message auth provides end-to-end verification
+Relays MUST:
+- Support configurable strict/delegated mode.
+- Reject unauthorized principal/from combinations.
+- Apply quotas and rate limits at least by `transport principal`, and SHOULD additionally track `from` DID.
+- Emit auditable tuple: `(principal_id, from_did, message_id)`.
 
-### 5.3 Replay Protection
-
-Transport layer SHOULD implement:
-- Nonce/timestamp checking for webhook signatures
-- Connection-level sequence numbers (optional)
-
-AMP-level replay protection (RFC 001 §8.4) remains the primary defense.
-
-### 5.4 DoS Mitigation
-
-Implementations SHOULD:
-- Enforce message size limits
-- Implement rate limiting per DID
-- Timeout slow connections
-- Reject malformed messages early
+Failure mapping:
+- Unauthorized principal/from binding -> `3001` (HTTP 401/403, WS 1008, TCP ERROR then close).
 
 ---
 
-## 7. Implementation Considerations
+## 8. Error Handling and Retry
 
-### 7.1 Choosing a Binding
+### 8.1 Canonical Categories
 
-| Use Case | Recommended Binding |
-|----------|---------------------|
-| Real-time agent chat | WebSocket |
-| High-frequency messaging | WebSocket or TCP |
-| Relay-to-relay backbone | TCP |
-| Maximum throughput | TCP |
-| Simple RPC-style calls | HTTP POST |
-| Serverless environments | HTTP + Webhook |
-| Mobile/constrained devices | HTTP (battery-friendly) |
-| Firewall-restricted | WebSocket (port 443) |
+| Category | Typical Cause | AMP Hint |
+|----------|---------------|----------|
+| Framing/parse | Invalid WS/TCP/HTTP wrapper | 1001 |
+| Size violation | Over effective max | 1001 |
+| Version mismatch | Unsupported AMP `v` | 1004 |
+| Auth failure | Invalid token/mTLS/signature | 3001 |
+| Policy rejection | Rate limit / relay policy / TTL=0 offline | 2003 |
+| Internal failure | Unexpected server error | 5001 |
 
-### 7.2 Hybrid Approach
+### 8.2 TTL=0 Mapping (from RFC 001)
 
-Agents MAY support multiple bindings simultaneously:
-- WebSocket for active connections
-- TCP for high-throughput relay links
-- HTTP webhook for offline delivery
-- HTTP polling as fallback
+If recipient is offline/unreachable and message `ttl = 0`:
+- WebSocket path: reject at relay policy layer (for example, close 1008 with policy reason).
+- HTTP path: reject with 429 or 503 (policy dependent) and AMP hint `2003`.
+- TCP path: send `ERROR` frame (`code=2003`) then close or continue by policy.
 
-### 7.3 Testing Interoperability
+### 8.3 Retry Guidance
 
-Implementations SHOULD test:
-- [ ] WebSocket handshake with `amp.v1` subprotocol
-- [ ] Binary frame encoding/decoding
-- [ ] Large message handling (>1 MiB)
-- [ ] Reconnection with message recovery
-- [ ] HTTP POST with CBOR body
-- [ ] Webhook signature verification
-- [ ] TCP handshake and framing
-- [ ] TCP graceful shutdown (GOAWAY)
+- If transport disconnect occurs before next-hop acceptance, sender SHOULD retry.
+- If delivery state is uncertain, sender MAY retry same AMP `id`.
+- Receivers MUST enforce idempotency by RFC 001 message ID semantics.
+
+Recommended reconnect backoff:
+- initial 1 second, multiplier 2, max 60 seconds, jitter 0 to 1 second.
 
 ---
 
-## 8. IANA Considerations
+## 9. Versioning and Compatibility
 
-### 7.1 WebSocket Subprotocol
+Binding version is independent from AMP message version:
+- Binding version: transport behavior (`amp.v1`, `X-AMP-Transport-Version`, handshake.version).
+- AMP version: RFC 001 message header `v` plus HELLO negotiation.
 
-This document registers the `amp.v1` WebSocket subprotocol:
-
-| Field | Value |
-|-------|-------|
-| Subprotocol Identifier | `amp.v1` |
-| Reference | This document |
-
-### 7.2 Media Type
-
-AMP uses existing `application/cbor` media type (RFC 8949).
+Implementations MUST validate both dimensions.
 
 ---
 
-## 9. References
+## 10. Security Considerations
 
-### 8.1 Normative References
-
-- [RFC 001] Agent Messaging Protocol (Core)
-- [RFC 2119] Key words for RFCs
-- [RFC 6455] The WebSocket Protocol
-- [RFC 8949] CBOR
-- [RFC 8446] TLS 1.3
-
-### 8.2 Informative References
-
-- [RFC 7231] HTTP/1.1 Semantics
-- [RFC 9110] HTTP Semantics
-- [DIDComm Transports] https://identity.foundation/didcomm-messaging/spec/#transports
+- Production transport MUST use TLS (WSS/HTTPS/AMPS).
+- Transport credentials SHOULD be short-lived and revocable.
+- Transport auth complements, but does not replace, RFC 001 signature/encryption checks.
+- Receivers SHOULD fail fast on malformed length/framing/wrappers.
+- Webhook signature verification MUST bind timestamp + payload to mitigate replay.
+- Error responses SHOULD avoid creating decrypt-oracle or recipient-existence oracle behavior.
 
 ---
 
-## Changelog
+## 11. Implementation Checklist
 
-| Date | Version | Author | Changes |
-|------|---------|--------|---------|
-| 2026-02-05 | 0.1 | Ryan Cooper | Initial draft |
-| 2026-02-05 | 0.2 | Ryan Cooper | Added TCP binding (Section 4): length-prefixed framing, handshake, GOAWAY, optional multiplexing |
-| 2026-02-05 | 0.3 | Ryan Cooper | Added message size negotiation (§2.2.1): mandatory 1 MiB minimum, handshake declares max_msg_size, DID Document hint |
+- [ ] Meets role MTI requirements in Section 2.2.
+- [ ] Preserves one transport unit = one AMP payload.
+- [ ] Supports inbound payload at least 1 MiB.
+- [ ] Negotiates/enforces effective max size.
+- [ ] Enforces HELLO sequencing rules for persistent channels.
+- [ ] Enforces transport principal vs `from` DID policy.
+- [ ] Implements fixed polling/webhook wrappers if supported.
+- [ ] Maps errors to canonical categories in Section 8.
+- [ ] Passes Appendix A vectors for claimed bindings.
 
 ---
 
-## Open Questions
+## 12. References
 
-1. **AMP-level Ping/Pong**: Should PING (0x10) and PONG (0x11) be added to RFC 001 message types, or kept transport-specific?
+### 12.1 Normative References
 
-2. **Batch HTTP**: Should we support sending multiple AMP messages in one HTTP request (array of CBOR)?
+- RFC 001: Agent Messaging Protocol (Core)
+- RFC 2119: Key words for use in RFCs
+- RFC 8174: Ambiguity of uppercase/lowercase in RFC 2119 keywords
+- RFC 6455: The WebSocket Protocol
+- RFC 8446: TLS 1.3
+- RFC 8949: CBOR
+- RFC 9110: HTTP Semantics
 
-3. **Server-Sent Events**: Is SSE a useful alternative to WebSocket for read-heavy scenarios?
+### 12.2 Informative References
 
-4. **HTTP/2 Streams**: Should we define HTTP/2 stream semantics for multiplexed AMP channels?
+- RFC 7231: HTTP/1.1 Semantics and Content (historical)
+- RFC 5246: TLS 1.2 (legacy interoperability)
 
-5. **mTLS DID Binding**: How exactly should DID be bound to TLS client certificates?
+---
+
+## Appendix A. Minimal Test Vectors
+
+### A.1 TCP Frame Positive
+
+Given payload hex `a1617801` and frame type `0x01`:
+- length = `00000005`
+- full frame hex: `0000000501a1617801`
+
+Receiver MUST parse one `AMP_MESSAGE` payload `a1617801`.
+
+### A.2 TCP Frame Negative
+
+Frame hex `0000000401a1617801` MUST be rejected (declared length mismatch).
+
+### A.3 WebSocket Handshake
+
+Request MUST include `Sec-WebSocket-Protocol: amp.v1`.
+Response MUST select `amp.v1` with status `101`.
+If absent, handshake MUST be rejected.
+
+### A.4 HTTP Polling Wrapper
+
+Valid CBOR object with fields:
+- `messages`: array of bstr
+- `next_cursor`: tstr or null
+- `has_more`: bool
+
+Any type mismatch MUST be treated as malformed wrapper (`400` / hint `1001`).
+
+### A.5 Size-Limit Violation
+
+Given effective max 1 MiB and payload 1 MiB + 1 byte:
+- WS: close 1009 or policy-equivalent reject.
+- HTTP: 413.
+- TCP: transport ERROR then close (or policy reject).
+
+---
+
+## Appendix B. Open Questions
+
+1. Should Relay Profile additionally require WebSocket (`MUST`) once interop test coverage matures?
+2. Should AMPS define mandatory congestion-control and backpressure signaling in this RFC or a follow-up?
+3. Should webhook wrapper include optional batch delivery in this RFC or defer to RFC 003?
