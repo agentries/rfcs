@@ -1,15 +1,15 @@
-# RFC 003: Agent Capability Negotiation
+# RFC 004: Capability Schema Registry & Compatibility
 
 **Status**: Proposal (Not Yet Drafted)  
 **Authors**: TBD  
 **Created**: 2026-02-04  
-**Updated**: 2026-02-04  
+**Updated**: 2026-02-06  
 
 ---
 
 ## Abstract
 
-This RFC proposes a protocol for dynamic capability negotiation between agents, enabling runtime discovery of compatible interfaces and graceful degradation when full compatibility isn't available.
+This RFC proposes a protocol for a capability schema registry and dynamic compatibility negotiation between agents, enabling runtime discovery of compatible interfaces and graceful degradation when full compatibility isn't available.
 
 ---
 

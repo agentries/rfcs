@@ -1,9 +1,9 @@
-# RFC 005: Agent Delegation & Authorization
+# RFC 005: Delegation Credentials & Authorization
 
 **Status**: Proposal (Not Yet Drafted)  
 **Authors**: TBD  
 **Created**: 2026-02-04  
-**Updated**: 2026-02-04  
+**Updated**: 2026-02-06  
 **Depends On**: Agentries Core (DID, Capabilities)
 
 ---

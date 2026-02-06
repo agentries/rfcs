@@ -19,19 +19,23 @@ Request for Comments (RFCs) for extending the Agentries protocol.
 5. **Implemented** → Merged into codebase
 6. **Rejected/Withdrawn** → Not proceeding
 
+Note: **Accepted** indicates implementation-ready specifications (byte-accurate and testable).
+
 ## Current RFCs
 
 | RFC | Title | Status | Author | Last Updated |
 |-----|-------|--------|--------|--------------|
-| 001 | [Agent Messaging Protocol (AMP)](001-agent-messaging-protocol.md) | **Draft v3.1** | Ryan Cooper, Jason Huang | 2026-02-04 |
-| 002 | [Transport Bindings](002-transport-bindings.md) | Draft v0.3 | Ryan Cooper | 2026-02-05 |
-| 003 | Relay & Store-and-Forward | Proposal | - | - |
-| 004 | [Capability Schema Registry](003-capability-negotiation.md)¹ | Proposal (Outline) | - | - |
-| 005 | [Delegation Credentials](005-delegation-authorization.md) | Proposal (Outline) | - | - |
-| 006 | [Session Protocol](004-session-protocol.md)¹ | Proposal (Outline) | - | - |
-| 007 | [Agent Payment Protocol](007-agent-payment-protocol.md) | Proposal (Outline) | - | - |
-
-¹ File rename pending (old numbering)
+| 001 | [Agent Messaging Protocol (AMP Core)](001-agent-messaging-protocol.md) | **Draft v3.1** | Ryan Cooper, Jason Huang | 2026-02-04 |
+| 002 | [Transport Bindings (HTTP/WS/MQ)](002-transport-bindings.md) | Draft v0.3 | Ryan Cooper | 2026-02-05 |
+| 003 | [Relay & Store-and-Forward](003-relay-store-and-forward.md) | Planned (Future) | - | 2026-02-06 |
+| 004 | [Capability Schema Registry & Compatibility](004-capability-schema-registry.md) | Proposal (Outline) | - | 2026-02-06 |
+| 005 | [Delegation Credentials & Authorization](005-delegation-authorization.md) | Proposal (Outline) | - | 2026-02-06 |
+| 006 | [Session Protocol (State + Recovery)](006-session-protocol.md) | Proposal (Outline) | - | 2026-02-06 |
+| 007 | [Agent Payment Protocol](007-agent-payment-protocol.md) | Proposal (Outline) | - | 2026-02-05 |
+| 008 | [Agent Discovery & Directory](008-agent-discovery-directory.md) | Planned (Future) | - | 2026-02-06 |
+| 009 | [Reputation & Trust Signals](009-reputation-trust-signals.md) | Planned (Future) | - | 2026-02-06 |
+| 010 | [Observability & Evaluation Telemetry](010-observability-evaluation-telemetry.md) | Planned (Future) | - | 2026-02-06 |
+| 011 | [Multi-Agent Coordination & Group Messaging](011-multi-agent-coordination.md) | Planned (Future) | - | 2026-02-06 |
 
 ## Supporting Documents
 
@@ -55,7 +59,7 @@ Request for Comments (RFCs) for extending the Agentries protocol.
 
 *Priority: High - enables agent interoperability without 24/7 uptime.*
 
-### RFC 004: Capability Schema Registry
+### RFC 004: Capability Schema Registry & Compatibility
 **Problem**: Static capability declarations don't capture dynamic compatibility.
 
 **Scope**:
@@ -65,7 +69,7 @@ Request for Comments (RFCs) for extending the Agentries protocol.
 
 *Note: May be merged into RFC 001 as detailed extension.*
 
-### RFC 005: Delegation Credentials
+### RFC 005: Delegation Credentials & Authorization
 **Problem**: Agents need delegated authority standards.
 
 **Scope**:
@@ -74,7 +78,7 @@ Request for Comments (RFCs) for extending the Agentries protocol.
 - Delegation chains
 - Revocation mechanisms
 
-### RFC 006: Session Protocol
+### RFC 006: Session Protocol (State + Recovery)
 **Problem**: Stateful agent interactions need session management.
 
 **Scope**:
@@ -95,6 +99,39 @@ Request for Comments (RFCs) for extending the Agentries protocol.
 
 *Priority: Lower - can build meaningful systems without payments first.*
 
+### RFC 008: Agent Discovery & Directory
+**Problem**: Agents need a way to find peers and publish capabilities.
+
+**Scope**:
+- Directory registration and updates
+- Search and filtering by capability
+- Freshness and liveness signals
+- Privacy controls and visibility
+
+### RFC 009: Reputation & Trust Signals
+**Problem**: Agents need trust signals for counterparties and services.
+
+**Scope**:
+- Reputation signal types and provenance
+- Aggregation and decay models
+- Verifiable attestations and disputes
+
+### RFC 010: Observability & Evaluation Telemetry
+**Problem**: Operators need consistent telemetry to measure reliability and quality.
+
+**Scope**:
+- Telemetry event taxonomy and schemas
+- Privacy and data minimization
+- Aggregation and correlation guidelines
+
+### RFC 011: Multi-Agent Coordination & Group Messaging
+**Problem**: Complex workflows require standardized coordination semantics.
+
+**Scope**:
+- Group addressing and membership
+- Roles, handoffs, and conflict resolution
+- Coordination metadata patterns
+
 ## Relationship to Agentries Core
 
 ```
@@ -107,7 +144,7 @@ Request for Comments (RFCs) for extending the Agentries protocol.
          ▼                ▼              ▼               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    RFCs by Priority                              │
-├─────────────────────────────────────────────────────────────────┤
+├─────────────────────┬───────────────────────────────────────────┤
 │  P0: Core           │  RFC 001 AMP Core                         │
 │                     │  RFC 002 Transport Bindings               │
 │                     │  RFC 003 Relay & Store-and-Forward        │
@@ -117,6 +154,11 @@ Request for Comments (RFCs) for extending the Agentries protocol.
 │                     │  RFC 006 Session Protocol                 │
 ├─────────────────────┼───────────────────────────────────────────┤
 │  P2: Advanced       │  RFC 007 Payment Protocol                 │
+├─────────────────────┼───────────────────────────────────────────┤
+│  P3: Ecosystem      │  RFC 008 Discovery & Directory            │
+│                     │  RFC 009 Reputation & Trust Signals       │
+│                     │  RFC 010 Observability & Evaluation       │
+│                     │  RFC 011 Multi-Agent Coordination         │
 └─────────────────────┴───────────────────────────────────────────┘
 ```
 
@@ -132,7 +174,7 @@ Request for Comments (RFCs) for extending the Agentries protocol.
 ## Contributing
 
 1. Fork this repo
-2. Create `rfcs/NNN-your-proposal.md`
+2. Create `NNN-your-proposal.md` using `RFC-TEMPLATE.md` as a starting point
 3. Open PR for discussion
 4. Iterate based on feedback
 5. Maintainers approve or request changes

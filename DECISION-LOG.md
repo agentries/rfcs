@@ -126,3 +126,26 @@
 - 所有 AMP 消息使用 CBOR 编码
 - Schema 使用 CDDL (RFC 8610) 定义
 - 实现需要 CBOR 库支持
+
+---
+
+## DL-005: RFC Renumbering by Priority
+
+**Date**: 2026-02-06  
+**RFC**: All  
+**Round**: 0 (Indexing)  
+**Raised by**: Nowa  
+
+**Decision**: 按优先级重新编号 RFC，并用新编号对齐文件名与索引。
+
+**Context**: 现有 RFC 编号与优先级不一致，部分计划中的主题缺少占位文档，导致导航和沟通成本增加。
+
+**Rationale**:
+- 编号即优先级，降低讨论与查找成本
+- 通过占位文档明确路线图
+- 索引与文件名一致，避免链接漂移
+
+**Implication**:
+- 更新 `README.md` 索引与优先级图
+- 重命名 RFC 003 -> RFC 004，RFC 004 -> RFC 006
+- 新增 RFC 003、008-011 占位文档

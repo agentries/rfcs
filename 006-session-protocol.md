@@ -1,10 +1,10 @@
-# RFC 004: Agent Session Protocol
+# RFC 006: Session Protocol (State + Recovery)
 
 **Status**: Proposal (Not Yet Drafted)  
 **Authors**: TBD  
 **Created**: 2026-02-04  
-**Updated**: 2026-02-04  
-**Depends On**: RFC 001 (AMP), RFC 003 (Capability Negotiation)
+**Updated**: 2026-02-06  
+**Depends On**: RFC 001 (AMP), RFC 004 (Capability Schema Registry)
 
 ---
 

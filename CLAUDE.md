@@ -14,10 +14,15 @@ AMP-FIRST-PRINCIPLES.md           # Design rationale (why these decisions)
 DECISION-LOG.md                   # Architectural decision records
 001-agent-messaging-protocol.md   # Core AMP spec (Draft v3.1) - foundational
 002-transport-bindings.md         # WebSocket/HTTP/TCP bindings (Draft v0.3)
-003-capability-negotiation.md     # Capability versioning (Proposal)
-004-session-protocol.md           # Multi-turn conversations (Proposal)
+003-relay-store-and-forward.md    # Relay delivery (Planned)
+004-capability-schema-registry.md # Capability registry (Proposal)
 005-delegation-authorization.md   # Delegation credentials (Proposal)
+006-session-protocol.md           # Session management (Proposal)
 007-agent-payment-protocol.md     # Agent economics (Proposal)
+008-agent-discovery-directory.md  # Discovery and directory (Planned)
+009-reputation-trust-signals.md   # Reputation signals (Planned)
+010-observability-evaluation-telemetry.md # Telemetry (Planned)
+011-multi-agent-coordination.md   # Multi-agent coordination (Planned)
 ```
 
 ## Key Design Decisions
@@ -32,7 +37,7 @@ DECISION-LOG.md                   # Architectural decision records
 
 Proposal → Draft → Review → Accepted → Implemented → Rejected/Withdrawn
 
-Current state: RFC 001-002 in Draft; RFC 003-007 in Proposal (outlines only).
+Current state: RFC 001-002 in Draft; RFC 004-007 in Proposal (outlines only); RFC 003 and RFC 008-011 are planned.
 
 ## Document Conventions
 
@@ -41,6 +46,7 @@ Current state: RFC 001-002 in Draft; RFC 003-007 in Proposal (outlines only).
 - ASCII diagrams for message flows and architecture
 - JSON/YAML examples for message structures
 - Open Questions sections indicate areas needing input
+- **Accepted** indicates implementation-ready specifications (byte-accurate and testable).
 
 ## Reading Order for Context
 
@@ -48,10 +54,12 @@ Current state: RFC 001-002 in Draft; RFC 003-007 in Proposal (outlines only).
 2. `AMP-FIRST-PRINCIPLES.md` - Understand the "why" behind design choices
 3. `001-agent-messaging-protocol.md` - Core protocol (all other RFCs depend on this)
 4. `DECISION-LOG.md` - Key architectural decisions with rationale
-5. Extensions (003-007) as needed
+5. Extensions (003-011) as needed
 
 ## Dependencies Between RFCs
 
 - RFC 001 (AMP Core) is foundational
 - RFC 002 (Transport) depends on RFC 001
-- RFC 003+ depend on RFC 001 and/or Agentries Core
+- RFC 003 (Relay) depends on RFC 001 and RFC 002
+- RFC 004-007 build on RFC 001 and Agentries Core
+- RFC 008-011 build on Agentries Core, with cross-dependencies noted per RFC
