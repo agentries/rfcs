@@ -4,7 +4,7 @@
 **Authors**: Ryan Cooper, Nowa
 **Created**: 2026-02-05
 **Updated**: 2026-02-06
-**Version**: 0.6
+**Version**: 0.7
 
 ---
 
@@ -35,6 +35,7 @@ This RFC defines AMP transport bindings with a TCP-first normative model. AMPS (
 3.2 Frame Model and Limits
 3.3 AMP Version Negotiation Sequencing
 3.4 ACK Boundary and Delivery Semantics
+3.5 Endpoint Selection and Binding Priority
 4. AMPS/TCP Binding (Canonical)
 5. WebSocket Mapping to Canonical Semantics
 6. HTTP Mapping to Canonical Semantics
@@ -102,9 +103,9 @@ A transport implementation is conformant only if it:
 `Relay Profile`:
 - MUST support AMPS server endpoint.
 - MUST support HTTP `POST /amp/v1/messages` endpoint.
-- MUST support HTTP polling endpoint with the normative wrapper in Section 6.1.
+- MUST support HTTP polling endpoint with the normative wrapper in Section 6.2.
 - SHOULD support WebSocket endpoint.
-- SHOULD support webhook push with the normative wrapper in Section 6.2.
+- SHOULD support webhook push with the normative wrapper in Section 6.3.
 
 Rationale: HTTP MTI guarantees minimum cross-vendor interoperability; AMPS canonical semantics guarantee performance and precise transport behavior.
 
@@ -153,6 +154,22 @@ Transport success is not application success.
 - Transport success indicates next-hop acceptance only.
 - Application confirmation requires RFC 001 `ACK`/`PROC_OK`/`PROC_FAIL`.
 - Relay-emitted `ACK` MUST follow RFC 001 `ack_source` and signature validation rules.
+
+### 3.5 Endpoint Selection and Binding Priority
+
+Endpoint discovery and service typing are defined in RFC 008 (`AgentMessaging`, `AgentMessagingRelay`, `AgentMessagingGated`).
+
+When multiple routable endpoints are available, sender/relay MUST apply this binding priority:
+
+```
+amps > wss > https
+```
+
+Selection rules:
+- Only endpoints supported by local implementation and policy are eligible.
+- Within the same binding class, preserve DID Document service order.
+- `AgentMessagingGated` endpoints MUST follow RFC 008 contact policy before message submission.
+- If no eligible endpoint exists, sender/relay SHOULD map failure to `2001` (recipient not found/unsupported) or `2002` (endpoint unreachable) based on local evidence.
 
 ---
 
@@ -324,6 +341,14 @@ Rules:
 - `messages[i]` MUST be raw AMP bytes (no semantic re-encoding).
 - `next_cursor = null` indicates no further page.
 
+Minimal polling semantics in RFC 002 (interoperability baseline):
+- Cursor progression MUST be monotonic for a given consumer identity.
+- Polling MAY redeliver previously seen messages (at-least-once).
+- Polling response MUST preserve message byte integrity for each `messages[i]`.
+- Servers SHOULD define a finite replay window and document it.
+
+Definitive store-and-forward consumption semantics (commit/ack-on-read/redelivery policy) are specified in RFC 003.
+
 ### 6.3 Webhook Wrapper (Normative)
 
 Relay push:
@@ -351,6 +376,7 @@ webhook-delivery = {
 Receiver MUST verify:
 - `X-AMP-Timestamp` freshness.
 - `X-AMP-Signature` over timestamp + body.
+- `X-AMP-Relay` header equals `webhook-delivery.relay`.
 - `webhook-delivery.message` as valid AMP payload.
 
 ### 6.4 HTTP Status Mapping
@@ -376,16 +402,17 @@ Receiver MUST verify:
 
 Transport auth establishes `transport principal`.
 
-Default rule (`strict` mode, RECOMMENDED default):
+Default rule (`strict` mode, MUST be default):
 - `transport principal DID` MUST equal AMP `from` DID.
 
 Optional delegated rule (`act_as` mode):
 - Principal MAY send with a different `from` DID only if auth material explicitly authorizes that DID (for example, token `act_as` claim).
+- `act_as` mode MUST be explicitly enabled by policy and MUST be auditable.
 
 ### 7.2 Enforcement Requirements
 
 Relays MUST:
-- Support configurable strict/delegated mode.
+- Support configurable strict/delegated mode, with strict as default.
 - Reject unauthorized principal/from combinations.
 - Apply quotas and rate limits at least by `transport principal`, and SHOULD additionally track `from` DID.
 - Emit auditable tuple: `(principal_id, from_did, message_id)`.
@@ -515,6 +542,27 @@ Given effective max 1 MiB and payload 1 MiB + 1 byte:
 - WS: close 1009 or policy-equivalent reject.
 - HTTP: 413.
 - TCP: transport ERROR then close (or policy reject).
+
+### A.6 Strict Principal Binding Negative
+
+Given strict mode enabled:
+- transport principal DID = `did:web:example.com:agent:alice`
+- AMP `from` DID = `did:web:example.com:agent:bob`
+
+Expected:
+- Reject with auth failure mapping (`3001` hint).
+- MUST NOT forward payload to next hop.
+- SHOULD emit audit tuple with mismatched principal/from.
+
+### A.7 Persistent Channel Pre-HELLO Negative
+
+Given AMPS or WebSocket connection where transport handshake succeeded but AMP HELLO negotiation not completed:
+- Sender transmits non-handshake AMP message (e.g., `typ=0x10 MESSAGE`).
+
+Expected:
+- Receiver rejects message as protocol violation.
+- Connection MAY be closed by policy.
+- Error mapping SHOULD indicate unsupported/invalid protocol state (recommended `1004` or binding-local protocol error mapped to `1001`).
 
 ---
 

@@ -26,7 +26,7 @@ Note: **Accepted** indicates implementation-ready specifications (byte-accurate 
 | RFC | Title | Status | Author | Last Updated |
 |-----|-------|--------|--------|--------------|
 | 001 | [Agent Messaging Protocol (AMP Core)](001-agent-messaging-protocol.md) | **Draft v0.33 (Full Entry, Core Profile defined)** | Ryan Cooper, Jason Huang | 2026-02-06 |
-| 002 | [Transport Bindings (TCP-first, HTTP/WS mappings)](002-transport-bindings.md) | Draft v0.6 (TCP canonical + HTTP MTI + relay polling MUST) | Ryan Cooper, Nowa | 2026-02-06 |
+| 002 | [Transport Bindings (TCP-first, HTTP/WS mappings)](002-transport-bindings.md) | Draft v0.7 (routing priority + polling baseline + strict auth default) | Ryan Cooper, Nowa | 2026-02-06 |
 | 003 | [Relay & Store-and-Forward](003-relay-store-and-forward.md) | Planned (Future) | - | 2026-02-06 |
 | 004 | [Capability Schema Registry & Compatibility](004-capability-schema-registry.md) | Draft (Early) | - | 2026-02-06 |
 | 005 | [Delegation Credentials & Authorization](005-delegation-authorization.md) | Proposal (Outline) | - | 2026-02-06 |
