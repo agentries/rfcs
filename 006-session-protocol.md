@@ -119,6 +119,71 @@ Each session maintains:
 | `SESSION_RESUME` | Resume suspended session |
 | `SESSION_CLOSE` | Terminate session |
 
+---
+
+## 4. Provisional Responses
+
+Long-running operations SHOULD emit provisional responses to keep sessions responsive and enable progress tracking.
+
+### 4.1 Message Types
+
+```
+; Provisional (0x09-0x0B) — defined in RFC 001
+PROCESSING      = 0x09    ; Request received, working on it
+PROGRESS        = 0x0A    ; Progress update with percentage/ETA
+INPUT_REQUIRED  = 0x0B    ; Blocked, need additional input
+```
+
+### 4.2 Flow Example
+
+```
+Client                              Server
+   │                                   │
+   │  SESSION_MSG / CAP_INVOKE         │
+   │ ─────────────────────────────────►│
+   │                                   │
+   │  PROCESSING                       │
+   │◄───────────────────────────────── │
+   │                                   │
+   │  PROGRESS {percentage: 30}        │
+   │◄───────────────────────────────── │
+   │                                   │
+   │  INPUT_REQUIRED {prompt: "..."}   │
+   │◄───────────────────────────────── │
+   │                                   │
+   │  (client supplies input)          │
+   │──────────────────────────────────►│
+```
+
+### 4.3 Message Body Schemas (CDDL)
+
+```cddl
+processing-body = {
+  ? "eta_ms": uint,
+  ? "status_text": tstr,
+  ? "cancellable": bool
+}
+
+progress-body = {
+  "percentage": uint,
+  ? "eta_ms": uint,
+  ? "status_text": tstr,
+  ? "cancellable": bool
+}
+
+input-required-body = {
+  "prompt": tstr,
+  ? "options": [* tstr],
+  ? "timeout_ms": uint
+}
+```
+
+### 4.4 Rules
+
+- Provisional responses MUST include `reply_to` referencing the original request or session message.
+- `INPUT_REQUIRED` pauses processing until input arrives or `timeout_ms` elapses.
+- `PROCESSING`/`PROGRESS` are optional but recommended for tasks exceeding local timeouts.
+
 ### 3.3 State Persistence
 
 Options for storing session state:

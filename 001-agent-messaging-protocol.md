@@ -3,8 +3,8 @@
 **Status**: Draft  
 **Authors**: Ryan Cooper, Jason Apple Huang  
 **Created**: 2026-02-04  
-**Updated**: 2026-02-04  
-**Version**: 5.13
+**Updated**: 2026-02-06  
+**Version**: 0.30
 
 ---
 
@@ -16,6 +16,31 @@ AMP (Agent Messaging Protocol) is a native communication protocol designed for t
 - 🎯 **Goal**: Native messaging protocol for AI Agent ecosystem
 - ⚡ **Features**: Binary, efficient, agent-to-agent communication, capability invocation, document/credential exchange
 - 🔗 **Position**: Standalone protocol (not a DIDComm profile)
+
+## Table of Contents
+
+1. Problem Statement  
+2. Requirements  
+3. Protocol Layers  
+4. Message Format (CBOR)  
+5. Capability Invocation  
+6. Document Exchange  
+7. Credential Exchange  
+8. Security Considerations  
+9. Agentries Integration (AMP Discovery)  
+10. Presence & Status  
+11. Provisional Responses  
+12. Capability Namespacing & Versioning  
+13. Protocol Version Negotiation  
+14. Interoperability  
+15. Error Codes  
+16. Acknowledgment Semantics  
+17. Registry Governance  
+18. Open Questions  
+19. References  
+Appendix A. Test Vectors  
+Appendix B. Implementation Notes  
+Changelog  
 
 ---
 
@@ -56,9 +81,40 @@ Existing communication infrastructure was designed for humans:
 - Agent capability invocation (RPC)
 - Document and credential exchange
 
+### 1.4 Normative Language
+
+The key words "**MUST**", "**MUST NOT**", "**REQUIRED**", "**SHALL**", "**SHALL NOT**", "**SHOULD**", "**SHOULD NOT**", "**RECOMMENDED**", "**MAY**", and "**OPTIONAL**" in this document are to be interpreted as described in RFC 2119 and RFC 8174.
+
+### 1.5 Conformance
+
+An implementation conforms to AMP Core if it satisfies all **MUST/REQUIRED** statements in this RFC and, at minimum:
+- Implements the message envelope and validation rules in §4 and §8 (deterministic CBOR, Sig_Input, TTL checks, replay protection).
+- Implements HELLO/HELLO_ACK/HELLO_REJECT negotiation in §13.
+- Implements ERROR and ACK semantics in §15 and §16.
+- Rejects unsupported message types with ERROR 1005 (UNKNOWN_TYPE) or a more specific error when applicable.
+
+Support for capabilities, sessions, discovery, and other extensions is optional for AMP Core conformance; if implemented, those features MUST follow their respective RFCs (RFC 004/006/008).
+
+Conformance profiles:
+- `AMP Core`: Envelope/security/handshake/error/ack behavior defined in this RFC.
+- `AMP Full`: AMP Core plus document/credential/delegation application flows in this RFC and companion RFCs.
+
+### 1.6 Terminology
+
+- **Agent**: An autonomous or human-delegated software entity identified by a DID and capable of sending/receiving AMP messages.
+- **Sender**: The agent that creates and signs an AMP message.
+- **Recipient**: The intended agent(s) listed in `to`.
+- **Relay**: A store-and-forward intermediary that accepts AMP messages for delivery to recipients.
+- **Delivery Confirmation**: Acknowledgment that a message has been accepted for delivery (ACK from relay or recipient).
+- **Processing Confirmation**: Acknowledgment that a recipient has completed handling a message (PROC_OK/PROC_FAIL).
+- **Endpoint**: A network address where an AMP service receives messages.
+- **Contactable**: An agent that can receive AMP messages without prior approval.
+
 ---
 
 ## 2. Requirements
+
+The requirements below describe the full AMP target. For strict `AMP Core` conformance, Section 1.5 takes precedence on minimum required behavior.
 
 ### 2.1 Identity
 - **R1**: Agents MUST be identified by DID
@@ -73,12 +129,12 @@ Existing communication infrastructure was designed for humans:
 - **R6a**: MUST confirm transport-layer delivery (relay received)
 - **R6b**: SHOULD support application-layer confirmation (agent processing result)
 - **R6c**: Receipts MUST clearly distinguish delivery vs processing
-- **R7**: Messages MUST be persisted until confirmed
+- **R7**: Messages MUST be persisted until confirmed (see §16.5)
 - **R8**: Protocol MUST support asynchronous communication
 
 ### 2.4 Efficiency
 - **R9**: Message format MUST be binary (CBOR)
-- **R10**: Support batch message transmission
+- **R10**: Support batch message transmission (see §4.5)
 - **R11**: Support streaming (large documents)
 
 ### 2.5 Capability
@@ -138,9 +194,8 @@ Transport-agnostic design:
 
 **Encryption (Optional)**:
 - Algorithm: X25519-XSalsa20-Poly1305 (NaCl box)
-- Modes:
-  - `authcrypt`: Authenticated encryption (recipient can cryptographically verify sender)
-  - `anoncrypt`: Anonymous encryption (recipient cannot prove sender to third parties via encryption; see §8.6 for privacy boundaries)
+- Profile:
+  - `authcrypt`: Authenticated encryption using sender static key agreement key
 
 ### 3.3 Application Layer
 
@@ -162,41 +217,60 @@ Message type categories:
 ### 4.1 Base Message Structure
 
 ```cddl
-amp-message = {
-  ; Header
-  v: uint,                    ; Protocol version (1)
-  id: bstr,                   ; Message ID (16 bytes: 8 timestamp + 8 random)
+amp-message = amp-plaintext / amp-encrypted
+
+amp-plaintext = {
+  common-fields,
+  body: any,                  ; Message body (required; use null for no payload)
+  ? ext: {* tstr => any},     ; Extension fields (NOT signed, see §8.7)
+}
+
+amp-encrypted = {
+  common-fields,
+  enc: encrypted-payload,     ; Encrypted payload (replaces body)
+  ? ext: {* tstr => any},     ; Extension fields (NOT signed, see §8.7)
+}
+
+common-fields = (
+  v: uint,                    ; Protocol major version (see §13)
+  id: message-id,             ; 16-byte message ID (see §4.2)
   typ: uint,                  ; Message type
   ts: uint,                   ; Unix timestamp (milliseconds) - when created
   ttl: uint,                  ; Time-to-live (milliseconds) - REQUIRED (see §8.1, §8.3)
-  
+
   ; Routing
   from: did,                  ; Sender DID
   to: did / [+ did],          ; Recipient DID(s)
   ? reply_to: bstr,           ; Message ID being replied to
   ? thread_id: bstr,          ; Conversation/thread ID
-  
+
   ; Security
-  sig: bstr,                  ; Ed25519 signature (see §8.1 for Sig_Input)
-  ? enc: encrypted-payload,   ; Encrypted payload (replaces body)
-  
-  ; Payload
-  ? body: any,                ; Message body (structure determined by type)
-  
-  ; Extension
-  ? ext: {* tstr => any},     ; Extension fields (NOT signed, see §8.7)
+  sig: bstr                   ; Ed25519 signature (see §8.1 for Sig_Input)
+)
+
+message-id = bstr .size 16
+
+encrypted-payload = {
+  alg: "X25519-XSalsa20-Poly1305",
+  mode: "authcrypt",
+  nonce: bstr,                ; Nonce (XSalsa20-Poly1305)
+  ciphertext: bstr            ; Encrypted deterministic_cbor(body)
 }
 
-did = tstr  ; "did:web:agentries.xyz:agent:xxx"
+did = tstr  ; DID string or DID URL (optional key fragment)
 ```
 
 **Field Notes**:
-- `ts` + `ttl` determine message validity window (see §8.3)
-- `sig` covers ALL semantically critical fields (see §8.1 Sig_Input)
-  - Includes: id, typ, ts, ttl, from, to, reply_to, thread_id
-  - Always signs **plaintext** body (for encrypted messages, decrypt first then verify; see §8.6)
-- `body` MUST be encoded using **deterministic CBOR** (RFC 8949 §4.2) for signing; for unencrypted messages, verifiers MUST re-encode body deterministically before verification; for encrypted messages, verifiers use decrypted bytes directly (see §8.2)
-- `ext` is NOT signed — treat as untrusted (see §8.7 for security implications)
+- `v` is the protocol **major** version; see §13 for negotiation and mapping.
+- `ts` + `ttl` determine message validity window (see §8.3).
+- `sig` covers ALL semantically critical fields (see §8.1 Sig_Input):
+  - Includes: id, typ, ts, ttl, from, to, reply_to, thread_id.
+  - Always signs **plaintext** body (for encrypted messages, decrypt first then verify; see §8.6).
+- `body` is REQUIRED for unencrypted messages. If there is no payload, use CBOR `null` (`0xF6`).
+- `enc` and `body` are mutually exclusive. Encrypted messages MUST omit `body`; `enc.ciphertext` MUST encrypt `deterministic_cbor(body)` (see §8.6).
+- `enc.mode` is fixed to `"authcrypt"` in AMP 001.
+- `body` MUST be encoded using **deterministic CBOR** (RFC 8949 §4.2) for signing; for unencrypted messages, verifiers MUST re-encode body deterministically before verification; for encrypted messages, verifiers use decrypted bytes directly (see §8.2).
+- `ext` is NOT signed — treat as untrusted (see §8.7 for security implications).
 
 **Note on Examples**: Code examples throughout this document may omit some required fields (e.g., `ttl`, `sig`) for brevity. All required fields listed above MUST be present in actual implementations.
 
@@ -205,11 +279,16 @@ did = tstr  ; "did:web:agentries.xyz:agent:xxx"
 Inspired by MTProto, message IDs contain time information:
 
 ```
-Message ID (16 bytes):
+Message ID (16 bytes, big-endian):
 ┌────────────────────┬────────────────────┐
 │  Timestamp (8B)    │  Random (8B)       │
-│  Millisecond Unix  │  Random number     │
+│  uint64_be(ts_ms)  │  uint64_be(rand)   │
 └────────────────────┴────────────────────┘
+
+Encoding Rules:
+- `ts_ms` MUST equal the message `ts` field (milliseconds since Unix epoch).
+- `uint64_be` is an unsigned 64-bit big-endian integer.
+- `rand` MUST be generated from a cryptographically secure RNG.
 
 Properties:
 - Natural time ordering
@@ -249,7 +328,8 @@ RESPONSE          = 0x12    ; RPC response
 STREAM_START      = 0x13    ; Begin streaming transfer
 STREAM_DATA       = 0x14    ; Stream data chunk
 STREAM_END        = 0x15    ; End streaming transfer
-; 0x16-0x1F reserved
+BATCH             = 0x16    ; Batch container (multiple messages)
+; 0x17-0x1F reserved
 
 ; ═══════════════════════════════════════════════════════════════
 ; CAPABILITY (0x20-0x2F) — Capability discovery and invocation
@@ -309,73 +389,183 @@ EXTENSION         = 0xF0    ; Extension message (see ext field)
 ; 0xF1-0xFF reserved for future extension types
 ```
 
+**Type Semantics**:
+- Capability message semantics are defined in **RFC 004**.
+- Contact, discovery, and presence message semantics are defined in **RFC 008**.
+- Provisional response semantics are defined in **RFC 006**.
+
+### 4.4 Message Body Schemas (CDDL)
+
+The following CDDL defines the expected `body` structure for **core** AMP message types. Additional bodies are defined in other RFCs:
+- **Capability bodies (CAP_\*)**: RFC 004
+- **Contact & discovery bodies**: RFC 008
+- **Presence bodies**: RFC 008
+- **Provisional responses (PROCESSING/PROGRESS/INPUT_REQUIRED)**: RFC 006
+
+Capability identifiers and namespace governance are defined in **RFC 004** and are REQUIRED for interoperable capability naming.
+
+```cddl
+; Common scalars
+semver = tstr
+mime-type = tstr
+utc-timestamp = tstr  ; RFC 3339 UTC timestamp
+
+; Control bodies
+ping-body = null
+pong-body = null
+
+ack-body = {
+  "ack_source": "relay" / "recipient",
+  "received_at": uint,
+  ? "ack_target": did,
+  ? "stream_id": tstr,
+  ? "chunks_received": uint,
+  ? "verified": bool
+}
+
+proc-ok-body = {
+  ? "details": any
+}
+
+proc-fail-body = {
+  ? "error": any
+}
+
+error-body = {
+  "code": uint,
+  "category": tstr,
+  "message": tstr,
+  ? "details": any,
+  ? "retry": bool,
+  ? "batch_index": uint
+}
+
+; Document bodies
+doc-send-body = {
+  "content_type": mime-type,
+  "filename": tstr,
+  "size": uint,
+  "hash": bstr,
+  "data": bstr
+}
+
+doc-request-body = {
+  ? "doc_id": tstr,
+  ? "hash": bstr,
+  ? "accept": mime-type
+}
+
+stream-start-body = {
+  "stream_id": tstr,
+  "content_type": mime-type,
+  "filename": tstr,
+  "total_size": uint,
+  "total_chunks": uint,
+  "chunk_size": uint,
+  "hash_algo": tstr
+}
+
+stream-data-body = {
+  "stream_id": tstr,
+  "index": uint,
+  "data": bstr
+}
+
+stream-end-body = {
+  "stream_id": tstr,
+  "hash": bstr
+}
+
+; Credential bodies
+cred-issue-body = {
+  "format": tstr,
+  "credential": any,
+  ? "purpose": tstr
+}
+
+cred-request-body = {
+  "format": tstr,
+  ? "request": any,
+  ? "purpose": tstr
+}
+
+cred-present-body = {
+  "format": tstr,
+  "credential": any,
+  ? "purpose": tstr
+}
+
+cred-verify-body = {
+  "format": tstr,
+  "credential": any
+}
+
+; Delegation bodies
+deleg-grant-body = {
+  "credential": any,
+  ? "scope": any,
+  ? "expires": utc-timestamp
+}
+
+deleg-revoke-body = {
+  "delegation_id": tstr
+}
+
+deleg-query-body = {
+  "delegation_id": tstr
+}
+
+; Handshake bodies
+hello-body = {
+  "versions": [+ semver],
+  ? "extensions": [* tstr],
+  ? "agent_info": {
+    "name": tstr,
+    ? "implementation": tstr
+  }
+}
+
+hello-ack-body = {
+  "selected": semver
+}
+
+hello-reject-body = {
+  ? "reason": tstr
+}
+
+; Batch body
+batch-body = {
+  "items": [+ bstr]  ; CBOR-encoded amp-message bytes
+}
+```
+
+**Schema Notes**:
+- `doc-request-body` MUST include `doc_id` or `hash`.
+- `batch_index` is zero-based index into `batch-body.items`.
+
+### 4.5 Batch Messages
+
+**Purpose**: Reduce transport overhead by grouping multiple AMP messages into a single container.
+
+**Rules**:
+- The `BATCH` message body is `batch-body`.
+- Each item in `items` MUST be a complete CBOR-encoded `amp-message` with its own signature.
+- Recipients MUST process each item as if it arrived independently.
+- Recipients SHOULD preserve item order unless application semantics allow parallelization.
+- Recipients SHOULD send ACK/PROC/ERROR for each inner message (using the inner message `id`).
+- A recipient MAY ACK the batch container itself to indicate receipt of the batch.
+- If an inner item is malformed and cannot be decoded, recipients MAY return ERROR referencing the batch container with `batch_index`.
+
 **Streaming Clarification**: Large documents use the generic streaming mechanism (STREAM_START/DATA/END) with document metadata in the body. DOC_SEND is for small inline documents only.
 
 ---
 
 ## 5. Capability Invocation
 
-Core interaction pattern between agents:
+Capability discovery, invocation semantics, and compatibility rules are defined in **RFC 004**.
+This RFC only reserves message types (`CAP_QUERY`, `CAP_DECLARE`, `CAP_INVOKE`, `CAP_RESULT`) and their numeric codes.
 
-### 5.1 Capability Query
-
-```cbor
-; Request
-{
-  "typ": 0x20,  ; CAP_QUERY
-  "body": {
-    "filter": {
-      "type": "code-review",
-      "version": ">=1.0"
-    }
-  }
-}
-
-; Response
-{
-  "typ": 0x21,  ; CAP_DECLARE
-  "body": {
-    "capabilities": [
-      {
-        "type": "code-review",
-        "version": "2.0",
-        "input_schema": "https://...",
-        "output_schema": "https://..."
-      }
-    ]
-  }
-}
-```
-
-### 5.2 Capability Invocation (RPC)
-
-```cbor
-; Request
-{
-  "typ": 0x22,  ; CAP_INVOKE
-  "body": {
-    "capability": "code-review",
-    "version": "2.0",
-    "params": {
-      "code": "fn main() {...}",
-      "language": "rust"
-    },
-    "timeout_ms": 30000
-  }
-}
-
-; Response
-{
-  "typ": 0x23,  ; CAP_RESULT
-  "body": {
-    "status": "success",
-    "result": {
-      "issues": [...],
-      "suggestions": [...]
-    }
-  }
-}
-```
+See: `004-capability-schema-registry.md`
 
 ---
 
@@ -430,7 +620,13 @@ Large documents use the generic streaming mechanism:
 }
 
 ; Receiver confirms via ACK with stream completion status
-; ACK body: { "stream_id": "doc-abc123", "chunks_received": 10, "verified": true }
+; ACK body: {
+;   "ack_source": "recipient",
+;   "received_at": 1707055200000,
+;   "stream_id": "doc-abc123",
+;   "chunks_received": 10,
+;   "verified": true
+; }
 ```
 
 **Streaming Specification**:
@@ -475,6 +671,36 @@ Where:
 - Missing chunks after timeout → request retransmission or fail
 - Hash mismatch → reject entire transfer
 - Duplicate chunk → ignore (idempotent)
+
+### 6.3 Streaming State Machine
+
+**Sender**:
+```
+IDLE
+  └─ STREAM_START → SENDING
+SENDING
+  ├─ STREAM_DATA (0..n-1) → SENDING
+  └─ STREAM_END → AWAIT_ACK
+AWAIT_ACK
+  ├─ ACK(verified=true) → DONE
+  └─ ERROR/timeout → DONE
+```
+
+**Receiver**:
+```
+IDLE
+  └─ STREAM_START → RECEIVING
+RECEIVING
+  ├─ STREAM_DATA → RECEIVING
+  └─ STREAM_END → VERIFY
+VERIFY
+  ├─ hash ok → ACK(verified=true) → DONE
+  └─ hash fail → ERROR → DONE
+```
+
+**Rules**:
+- Receiver MUST send a single ACK with `stream_id` after VERIFY.
+- Sender MUST treat missing ACK as transfer failure and MAY retry with a new `stream_id`.
 
 **Note**: The streaming mechanism is generic and can be used for any large payload, not just documents.
 
@@ -538,7 +764,7 @@ sig = Ed25519_Sign(sender_private_key, CBOR_Encode(Sig_Input))
 - `ts`, `ttl` - temporal validity (prevents relay manipulation)
 - `from`, `to` - routing (prevents re-routing attacks)
 - `reply_to`, `thread_id` - conversation context (if present)
-- `body` - **plaintext** payload content (see §8.6 for encrypted messages)
+- `body` - **plaintext** payload content (see §8.6 for encrypted messages). If there is no payload, `body` MUST be CBOR `null` before signing.
 
 **What is NOT signed**:
 - `sig` field itself
@@ -557,11 +783,11 @@ Relay transport bindings are defined in separate specifications (e.g., AMP-over-
 
 ### 8.2 Signature Verification
 
-**For Unencrypted Messages** (body field present):
+**For Unencrypted Messages** (body field present; use `null` for no payload):
 
 Verification steps:
 1. Extract `from` DID from message
-2. Resolve DID Document to obtain public key
+2. Resolve DID Document to obtain public key (see §8.9 key selection policy)
 3. Encode `body` using deterministic CBOR (RFC 8949 §4.2) → body_bytes
 4. Reconstruct Sig_Input using body_bytes
 5. Verify `sig` using Ed25519_Verify(public_key, CBOR_Encode(Sig_Input), sig)
@@ -570,7 +796,7 @@ Verification steps:
 **For Encrypted Messages** (enc field present):
 
 1. Extract `from` DID from message
-2. Resolve DID Document to obtain public key
+2. Resolve DID Document to obtain public key (see §8.9 key selection policy)
 3. Decrypt `enc.ciphertext` → body_bytes
 4. Reconstruct Sig_Input using body_bytes directly (no re-encoding)
 5. Verify `sig` using Ed25519_Verify(public_key, CBOR_Encode(Sig_Input), sig)
@@ -646,10 +872,32 @@ Verification steps:
 
 ### 8.5 Encryption
 
-- Sensitive content SHOULD use `authcrypt` or `anoncrypt`
+- Sensitive content SHOULD use `authcrypt`
 - Relays SHOULD NOT be able to read encrypted content
 - Key agreement uses X25519 (Curve25519 ECDH)
 - Symmetric encryption uses XSalsa20-Poly1305
+
+### 8.5.1 Encryption Profile (Normative)
+
+AMP 001 defines a single encryption profile: `authcrypt`.
+
+| Profile | `enc` bytes | Sender binding from encryption | Primary use |
+|---------|-------------|--------------------------------|-------------|
+| `authcrypt` | `alg`, `mode`, `nonce`, `ciphertext` | Yes (sender static key agreement key) | Default interoperable encrypted messaging |
+
+**`authcrypt` sender steps**:
+1. Resolve sender and recipient DID Documents.
+2. Select sender static X25519 key agreement key (see §8.9).
+3. Select recipient static X25519 key agreement key (see §8.9).
+4. Compute shared secret with X25519.
+5. Derive symmetric key compatible with NaCl box precomputation.
+6. Encrypt deterministic CBOR body with XSalsa20-Poly1305 and transmit without `epk`.
+
+**`authcrypt` recipient steps**:
+1. Resolve sender DID Document and obtain sender static key agreement public key.
+2. Use recipient local static private key.
+3. Compute shared secret and derive the same symmetric key.
+4. Decrypt ciphertext, then continue with signature verification (§8.6).
 
 ### 8.6 Sign-Then-Encrypt
 
@@ -657,7 +905,7 @@ Verification steps:
 
 **Why StE?**
 - Signature proves sender created the actual content (not just ciphertext)
-- Works naturally with both `authcrypt` and `anoncrypt` modes
+- Works with authenticated key agreement and signature verification
 - Simpler: no circular dependency between signature and ciphertext
 
 **Order of Operations (Sender)**:
@@ -673,7 +921,7 @@ Verification steps:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Critical**: The `enc.ciphertext` MUST encrypt the exact `deterministic_cbor(body)` byte sequence used in Sig_Input. Encrypting a different serialization will cause signature verification to fail after decryption.
+**Critical**: The `enc.ciphertext` MUST encrypt the exact `deterministic_cbor(body)` byte sequence used in Sig_Input. If there is no payload, `body` MUST be CBOR `null` (`0xF6`) before signing and encryption. Encrypting a different serialization will cause signature verification to fail after decryption.
 
 **Encrypted Message Structure**:
 
@@ -689,8 +937,7 @@ Verification steps:
   "sig": h'...',              ; signature over PLAINTEXT body
   "enc": {
     "alg": "X25519-XSalsa20-Poly1305",
-    "mode": "authcrypt",      ; or "anoncrypt"
-    "epk": h'...',            ; ephemeral public key
+    "mode": "authcrypt",
     "ciphertext": h'...',
     "nonce": h'...'
   }
@@ -725,13 +972,7 @@ Verification steps:
 - **Tamper detection**: if attacker modifies ciphertext without knowing plaintext, decryption yields garbage that fails signature verification
 - **No downgrade**: encrypted message has `enc` field; unencrypted has `body` field — different structures
 
-**Limitation**: If an attacker knows the plaintext, they can re-encrypt it with different parameters (new nonce/ephemeral key) and the signature remains valid. This does not compromise authenticity (content unchanged) but means the ciphertext itself is not cryptographically bound to the signature. See "Re-encryption attack" in Important Implications below.
-
-**Encryption Modes**:
-- `authcrypt`: Recipient can verify sender's identity (authenticated encryption)
-- `anoncrypt`: Recipient cannot cryptographically verify sender from encryption alone
-
-**Privacy Note on `anoncrypt`**: The `from` field remains in the unencrypted message header and is signed. Therefore, `anoncrypt` does NOT hide the sender from relays or observers — they can still see `from`. The purpose of `anoncrypt` is to prevent the *recipient* from cryptographically proving (to third parties) who sent the message based on encryption alone. Sender authentication still occurs via signature verification.
+**Limitation**: The signature does not directly cover ciphertext bytes. If encryption keys are compromised, an attacker could re-encrypt known plaintext with different parameters and the original signature over plaintext still verifies. This does not compromise content authenticity but changes ciphertext artifacts.
 
 **Important Implications**:
 
@@ -739,7 +980,7 @@ Verification steps:
 |-------------|-------------|
 | **Relay cannot verify signature** | Relays see only ciphertext; they cannot verify sender signature without decryption. Anti-abuse/gating at relay layer must use other mechanisms (e.g., sender reputation, rate limits, outer transport auth). |
 | **Verification order** | Recipients MUST decrypt first, then verify signature. When `enc` is present, `body` exists only inside the ciphertext. |
-| **Re-encryption attack** | An attacker who knows the plaintext can re-encrypt with different parameters (new ephemeral key, nonce) and the signature remains valid. This does NOT compromise authenticity (content unchanged) but changes ciphertext/routing artifacts. If "encryption parameters immutability" is required, additional mechanisms are needed (out of scope for AMP core). |
+| **Re-encryption after key compromise** | If encryption keys are compromised, known plaintext can be re-encrypted with different parameters while signature still verifies on plaintext. If ciphertext immutability is required, additional binding is needed (out of scope for AMP core). |
 
 **Note**: The signature does NOT directly cover the ciphertext. Binding is achieved through decrypt-then-verify: any tampering with `enc` that changes the plaintext will fail signature verification.
 
@@ -765,461 +1006,72 @@ Verification steps:
 
 **Future Extension**: If signed extensions are needed, a future protocol version may introduce a `signed_ext` field included in Sig_Input.
 
+### 8.8 Privacy Considerations
+
+- **Metadata exposure**: `from`, `to`, `typ`, `ts`, and `ttl` are visible to relays and network observers. Implementations SHOULD avoid placing sensitive information in headers.
+- **Presence leakage**: Presence and capacity signals can reveal operational patterns. Agents SHOULD allow opt-out or coarse-grained reporting.
+- **Error oracles**: Use generic error codes (e.g., 3001 UNAUTHORIZED) for decryption failures to avoid revealing recipient existence or keys.
+- **Logging**: Implementations SHOULD minimize retention of plaintext bodies and consider redaction for sensitive payloads.
+
+### 8.9 DID Key Selection Policy
+
+To reduce cross-implementation ambiguity, key selection MUST follow these rules.
+
+**Signature key selection**:
+- If `from` is a DID URL with fragment, implementations MUST use that exact verification method.
+- If `from` is a bare DID, implementations MUST select from active Ed25519 methods referenced by `assertionMethod` (fallback: `authentication`) and choose the lexicographically smallest method ID.
+- Verification MUST fail with 3001 (UNAUTHORIZED) if no eligible signing key exists.
+
+**Key agreement selection (`authcrypt`)**:
+- Sender and recipient keys MUST come from active X25519 methods referenced by `keyAgreement`.
+- If multiple eligible keys exist, select the lexicographically smallest method ID.
+- Receivers SHOULD attempt decryption with all active local key agreement private keys to support rotation.
+
 ---
 
 ## 9. Agentries Integration (AMP Discovery)
 
-### 9.1 Design Principle: Visibility Levels
+Discovery, contactability, and directory semantics are defined in **RFC 008**.
+This RFC reserves CONTACT and PRESENCE message types but does not specify discovery workflows.
 
-Agents have granular control over their discoverability and contactability through three visibility levels:
-
-| Level | In Directory | Contactable | Use Case |
-|-------|--------------|-------------|----------|
-| `PRIVATE` | No | No | Internal agents, no external communication |
-| `DISCOVERABLE` | Yes | Requires approval | Visible but gated, like LinkedIn connections |
-| `OPEN` | Yes | Yes | Fully accessible public agents |
-
-**Rationale**:
-- **Privacy**: Agents may need identity without exposure
-- **Security**: Public endpoints increase attack surface
-- **Control**: Gating mechanism for high-value agents
-- **Flexibility**: Different agents have different needs
-
-Analogy: Having an ID card ≠ publishing your phone number. But you might list yourself in a directory with "contact me for inquiries."
-
-### 9.2 DID Document Service Declaration
-
-Agents wishing to receive AMP messages declare a service in their DID Document:
-
-```json
-{
-  "@context": [
-    "https://www.w3.org/ns/did/v1",
-    "https://agentries.xyz/contexts/v1"
-  ],
-  "id": "did:web:agentries.xyz:agent:xxx",
-  "verificationMethod": [...],
-  
-  "service": [
-    {
-      "id": "did:web:agentries.xyz:agent:xxx#amp",
-      "type": "AgentMessaging",
-      "serviceEndpoint": "https://amp.example.com/agent/xxx"
-    },
-    {
-      "id": "did:web:agentries.xyz:agent:xxx#amp-relay",
-      "type": "AgentMessagingRelay", 
-      "serviceEndpoint": "https://relay.agentries.xyz"
-    }
-  ]
-}
-```
-
-### 9.3 Service Types
-
-| Type | Description | Use Case |
-|------|-------------|----------|
-| `AgentMessaging` | Direct AMP endpoint | Agent runs its own receiving service |
-| `AgentMessagingRelay` | Relay endpoint | Receive via Agentries Relay |
-
-### 9.4 Discovery Flow
-
-```
-Sender                                Recipient
-   │                                      │
-   │  1. Resolve DID                      │
-   │ ───────────────────────────────────► │
-   │                                      │
-   │  2. Check DID Document               │
-   │     AgentMessaging service present?  │
-   │                                      │
-   │  [Yes] 3a. Send to endpoint          │
-   │ ───────────────────────────────────► │
-   │                                      │
-   │  [No]  3b. Cannot send message       │
-   │        (Agent has not enabled AMP)   │
-   │                                      │
-```
-
-### 9.5 Registration Options in Agentries
-
-When registering an agent, the user chooses a visibility level:
-
-```
-Visibility Level:
-○ PRIVATE     - Not listed, not contactable
-○ DISCOVERABLE - Listed, requires approval to contact  
-○ OPEN        - Listed, directly contactable
-
-[If DISCOVERABLE or OPEN]
-  Endpoint options:
-  ○ Use Agentries Relay (recommended)
-  ○ Self-hosted endpoint: [________________]
-```
-
-**DID Document implications**:
-- **PRIVATE**: No AMP service, no directory listing
-- **DISCOVERABLE**: `AgentMessagingGated` service type
-- **OPEN**: `AgentMessaging` or `AgentMessagingRelay` service type
-
-### 9.6 Contact Request Flow (DISCOVERABLE agents)
-
-For agents with `DISCOVERABLE` visibility, a contact request handshake is required:
-
-```
-Requester                           Target (DISCOVERABLE)
-    │                                      │
-    │  1. Find agent in directory          │
-    │                                      │
-    │  2. CONTACT_REQUEST                  │
-    │     {reason: "...", capabilities: []}│
-    │ ────────────────────────────────────►│
-    │                                      │
-    │  3. Target reviews request           │
-    │     (manual or policy-based)         │
-    │                                      │
-    │  4. CONTACT_RESPONSE                 │
-    │     {status: "approved"|"denied"}    │
-    │◄──────────────────────────────────── │
-    │                                      │
-    │  [If approved]                       │
-    │  5. Normal AMP communication         │
-    │◄────────────────────────────────────►│
-```
-
-**Message Types** (added to Control category):
-
-```
-; Contact (0x06-0x08)
-CONTACT_REQUEST   = 0x06    ; Request to establish contact
-CONTACT_RESPONSE  = 0x07    ; Approve/deny contact request
-CONTACT_REVOKE    = 0x08    ; Revoke previously granted contact
-```
-
-**Contact Request Body**:
-
-```cbor
-{
-  "typ": 0x06,  ; CONTACT_REQUEST
-  "body": {
-    "reason": "Collaboration on code review tasks",
-    "capabilities_offered": ["code-review", "testing"],
-    "capabilities_requested": ["deployment"],
-    "expires": "2026-02-11T00:00:00Z"
-  }
-}
-```
-
-**Contact Response Body**:
-
-```cbor
-{
-  "typ": 0x07,  ; CONTACT_RESPONSE
-  "reply_to": "<request_id>",
-  "body": {
-    "status": "approved",  ; or "denied", "pending"
-    "granted_until": "2026-03-04T00:00:00Z",
-    "restrictions": {
-      "rate_limit": 100,  ; messages per hour
-      "capabilities": ["code-review"]  ; subset of requested
-    }
-  }
-}
-```
-
-### 9.7 Approval Mechanism: Policy-Based Auto-Approval
-
-Since AMP is an agent-to-agent protocol, approval decisions SHOULD be automated via configurable policies rather than requiring human intervention.
-
-**Design Principle**: Agents pre-configure approval policies; the system executes automatically. Human-in-the-loop is optional, not the default.
-
-**Policy Types**:
-
-| Policy | Description | Example |
-|--------|-------------|---------|
-| **Organization Trust** | Same organization → auto-approve | `org:acme-corp` agents approved |
-| **Reputation Threshold** | Score-based gating | `reputation > 0.8` → approve |
-| **Capability Whitelist** | Safe operations auto-approved | `read-only` → approve |
-| **Credential Verification** | VC holders approved | Has `TrustedDeveloper` VC → approve |
-| **Explicit Allowlist** | Pre-approved DIDs | `did:web:...:agent:trusted-bot` → approve |
-| **Default Deny** | Fallback for unmatched | No match → deny |
-
-**Policy Configuration Example**:
-
-```json
-{
-  "approval_policy": {
-    "rules": [
-      {
-        "name": "same-org",
-        "condition": {"org": "$self.org"},
-        "action": "approve",
-        "restrictions": {"rate_limit": 1000}
-      },
-      {
-        "name": "high-reputation",
-        "condition": {"reputation": {"$gte": 0.8}},
-        "action": "approve",
-        "restrictions": {"rate_limit": 100}
-      },
-      {
-        "name": "read-only-requests",
-        "condition": {"capabilities_requested": {"$subset": ["read", "query"]}},
-        "action": "approve"
-      },
-      {
-        "name": "verified-developers",
-        "condition": {"credentials": {"$contains": "TrustedDeveloperVC"}},
-        "action": "approve"
-      },
-      {
-        "name": "default",
-        "condition": true,
-        "action": "deny"
-      }
-    ],
-    "human_fallback": false  ; optional: queue for human review if true
-  }
-}
-```
-
-**Evaluation Order**: Rules are evaluated top-to-bottom; first match wins.
-
-**Human-in-the-Loop (Optional)**:
-- High-value agents MAY enable `human_fallback: true`
-- Unmatched requests queue for human review
-- This is the exception, not the norm
-
-**Analogy**: Firewall rules — policies are pre-configured, system auto-executes, humans intervene only for exceptions.
-
-### 9.8 Service Types (Updated)
-
-| Type | Visibility | Description |
-|------|------------|-------------|
-| `AgentMessaging` | OPEN | Direct endpoint, anyone can message |
-| `AgentMessagingRelay` | OPEN | Via relay, anyone can message |
-| `AgentMessagingGated` | DISCOVERABLE | Requires contact approval first |
-| *(no service)* | PRIVATE | Not contactable |
-
-### 9.9 UI Status Display
-
-Agent profiles display visibility and messaging status:
-
-```
-┌─────────────────────────────────────┐
-│  Agent: code-review-bot             │
-│  DID: did:web:agentries.xyz:...     │
-│                                     │
-│  📩 AMP: Open                       │  ← green, directly contactable
-│  or                                 │
-│  🔔 AMP: Discoverable               │  ← yellow, request required
-│  or                                 │
-│  🔒 AMP: Private                    │  ← gray, not contactable
-└─────────────────────────────────────┘
-```
+See: `008-agent-discovery-directory.md`
 
 ---
 
 ## 10. Presence & Status
 
-Agents SHOULD advertise their capacity to enable intelligent routing and avoid wasted requests.
+Presence semantics are defined in **RFC 008**.
 
-### 10.1 Design Principle: Capability Signals, Not Intent Signals
-
-Traditional presence (XMPP-style) uses discrete states like AVAILABLE/BUSY/AWAY. These are **intent signals** designed for humans ("I don't want to be disturbed").
-
-Agent presence should be **capability signals**: quantitative data that answers:
-1. Can you handle my request right now?
-2. How long will I wait?
-3. Should I try a different agent?
-
-**AMP transmits raw capacity data. UI layers derive human-friendly labels.**
-
-### 10.2 Presence Message
-
-```cbor
-{
-  "typ": 0x60,  ; PRESENCE
-  "body": {
-    "capacity": {
-      "concurrent_max": 10,      ; maximum parallel requests
-      "concurrent_current": 3,   ; currently processing
-      "queue_depth": 0,          ; requests waiting
-      "accepting_requests": true ; actively accepting new work
-    },
-    "performance": {
-      "estimated_response_ms": 500,    ; typical response time
-      "p95_response_ms": 2000          ; 95th percentile
-    },
-    "offline_until": null,       ; null = online, timestamp = temporarily away
-    "expires": "2026-02-04T13:00:00Z"  ; presence data TTL
-  }
-}
-```
-
-### 10.3 Deriving Human-Friendly Status (Informative)
-
-UIs MAY derive labels from capacity data:
-
-```
-if offline_until != null:
-    display "AWAY"
-elif not accepting_requests:
-    display "DND"
-elif concurrent_current / concurrent_max > 0.8:
-    display "BUSY"
-else:
-    display "AVAILABLE"
-```
-
-This is a UI concern, not protocol concern. The protocol transmits data; applications decide presentation.
-
-### 10.4 Presence Discovery
-
-Agents MAY:
-1. **Push**: Broadcast presence to known peers
-2. **Pull**: Respond to `PRESENCE_QUERY` requests
-3. **Subscribe**: Allow peers to subscribe to presence changes
-
-```
-; Presence (0x60-0x63)
-PRESENCE        = 0x60    ; Presence announcement
-PRESENCE_QUERY  = 0x61    ; Query agent presence
-PRESENCE_SUB    = 0x62    ; Subscribe to presence updates
-PRESENCE_UNSUB  = 0x63    ; Unsubscribe
-```
-
-### 10.5 Use Cases
-
-**Intelligent Routing**: Load balancer queries presence of multiple agents, routes to lowest `concurrent_current / concurrent_max` ratio.
-
-**SLA Estimation**: Caller checks `estimated_response_ms` before invoking, sets appropriate timeout.
-
-**Graceful Degradation**: When `accepting_requests: false`, caller knows to queue locally or try alternative agent.
-
-**Capacity Planning**: Monitor `queue_depth` trends to decide when to scale agent instances.
+See: `008-agent-discovery-directory.md`
 
 ---
 
 ## 11. Provisional Responses
 
-For long-running operations, agents SHOULD send provisional responses to indicate progress.
+Provisional response semantics (`PROCESSING`, `PROGRESS`, `INPUT_REQUIRED`) are defined in **RFC 006**.
 
-### 11.1 Message Types
-
-```
-; Provisional (0x09-0x0B)
-PROCESSING      = 0x09    ; Request received, working on it
-PROGRESS        = 0x0A    ; Progress update with percentage/ETA
-INPUT_REQUIRED  = 0x0B    ; Blocked, need additional input
-```
-
-### 11.2 Flow Example
-
-```
-Client                              Server
-   │                                   │
-   │  CAP_INVOKE (complex task)        │
-   │ ─────────────────────────────────►│
-   │                                   │
-   │  PROCESSING                       │
-   │◄───────────────────────────────── │
-   │                                   │
-   │  PROGRESS {pct: 30, eta_ms: 5000} │
-   │◄───────────────────────────────── │
-   │                                   │
-   │  PROGRESS {pct: 80, eta_ms: 1000} │
-   │◄───────────────────────────────── │
-   │                                   │
-   │  CAP_RESULT (final result)        │
-   │◄───────────────────────────────── │
-```
-
-### 11.3 Progress Body
-
-```cbor
-{
-  "typ": 0x0A,  ; PROGRESS
-  "reply_to": "<original_request_id>",
-  "body": {
-    "percentage": 30,
-    "eta_ms": 5000,
-    "status_text": "Analyzing code structure...",
-    "cancellable": true
-  }
-}
-```
-
-### 11.4 Input Required
-
-When an agent needs additional information to continue:
-
-```cbor
-{
-  "typ": 0x0B,  ; INPUT_REQUIRED
-  "reply_to": "<original_request_id>",
-  "body": {
-    "prompt": "Which branch should I review?",
-    "options": ["main", "develop", "feature/x"],
-    "timeout_ms": 60000
-  }
-}
-```
+See: `006-session-protocol.md`
 
 ---
 
 ## 12. Capability Namespacing & Versioning
 
-### 12.1 Capability Identifier Format
+Capability identifiers, versioning, and schema registry details are defined in **RFC 004**.
 
-Capabilities use reverse-domain namespacing with semantic versioning:
-
-```
-<namespace>.<capability>:<major>.<minor>
-
-Examples:
-  org.agentries.code-review:2.0
-  com.acme.data-analysis:1.3
-  io.github.user.custom-tool:0.1
-```
-
-### 12.2 Version Negotiation in CAP_QUERY
-
-```cbor
-{
-  "typ": 0x20,  ; CAP_QUERY
-  "body": {
-    "filter": {
-      "capability": "org.agentries.code-review",
-      "version": ">=2.0 <3.0"  ; semver range
-    }
-  }
-}
-```
-
-### 12.3 CAP_DECLARE with Versions
-
-```cbor
-{
-  "typ": 0x21,  ; CAP_DECLARE
-  "body": {
-    "capabilities": [
-      {
-        "id": "org.agentries.code-review:2.1",
-        "deprecated_versions": ["1.0", "1.1"],
-        "input_schema": "https://schema.agentries.xyz/code-review/2.1/input.json",
-        "output_schema": "https://schema.agentries.xyz/code-review/2.1/output.json"
-      }
-    ]
-  }
-}
-```
+See: `004-capability-schema-registry.md`
 
 ---
 
 ## 13. Protocol Version Negotiation
 
 ### 13.1 Version Handshake
+
+**Version Field Mapping**:
+- Header field `v` is the **major** AMP version (integer).
+- `HELLO`, `HELLO_ACK`, and `HELLO_REJECT` MUST be sent with `v = 1` as a stable negotiation envelope.
+- `versions` in HELLO are semver strings; `major(x.y.z)` is the integer before the first dot.
+- After selection, all subsequent messages MUST set `v = major(selected)`.
+- If a non-handshake message is received with an unsupported `v`, the recipient MUST respond with ERROR 1004 (UNSUPPORTED_VERSION).
 
 When establishing communication, agents negotiate the protocol version:
 
@@ -1248,6 +1100,7 @@ HELLO_REJECT    = 0x72    ; No compatible version
 
 ```cbor
 {
+  "v": 1,
   "typ": 0x70,  ; HELLO
   "body": {
     "versions": ["2.0", "1.0"],  ; preferred first
@@ -1266,73 +1119,31 @@ HELLO_REJECT    = 0x72    ; No compatible version
 - Unknown message types MUST be responded to with ERROR
 - Extensions are opt-in; core protocol remains stable
 
+### 13.5 Version Negotiation State Machine
+
+```
+UNNEGOTIATED
+  ├─ send HELLO → WAIT_ACK
+  └─ receive HELLO → SELECT
+WAIT_ACK
+  ├─ HELLO_ACK(selected) → NEGOTIATED
+  └─ HELLO_REJECT → FAILED
+SELECT
+  ├─ compatible version → send HELLO_ACK → NEGOTIATED
+  └─ no compatible version → send HELLO_REJECT → FAILED
+```
+
+**Rules**:
+- Only one active negotiation per peer at a time.
+- After `NEGOTIATED`, all non-handshake messages MUST use `v = major(selected)`.
+
 ---
 
 ## 14. Interoperability
 
-### 14.1 Design Principle
+Ecosystem interoperability guidance (A2A/MCP bridges) is defined in **RFC 008**.
 
-**AMP is an independent protocol**, with its own identity model (DIDs), encoding (CBOR), and features (delegation, presence). However, AMP provides optional compatibility layers to interoperate with other agent ecosystems.
-
-### 14.2 A2A Compatibility Layer
-
-AMP agents MAY expose an A2A-compatible Agent Card for discovery in the A2A ecosystem:
-
-```json
-{
-  "name": "code-review-bot",
-  "description": "Automated code review agent",
-  "url": "https://agents.example.com/code-review",
-  "protocols": {
-    "a2a": "https://agents.example.com/code-review/a2a",
-    "amp": "did:web:agentries.xyz:agent:code-review#amp"
-  },
-  "capabilities": [
-    {
-      "name": "code-review",
-      "description": "Review code for issues and suggestions"
-    }
-  ]
-}
-```
-
-### 14.3 Protocol Selection
-
-When both A2A and AMP are available, agents negotiate:
-
-```
-1. Discover agent via A2A directory (Agent Card)
-2. Check if AMP endpoint is listed
-3. If both support AMP → use AMP (more efficient)
-4. If only A2A → fall back to A2A (compatible)
-```
-
-### 14.4 Bridge Agents
-
-For agents that only speak A2A, a bridge can translate:
-
-```
-┌──────────┐    AMP     ┌──────────┐    A2A    ┌──────────┐
-│ AMP-only │ ─────────► │  Bridge  │ ────────► │ A2A-only │
-│  Agent   │            │  Agent   │           │  Agent   │
-└──────────┘            └──────────┘           └──────────┘
-```
-
-### 14.5 MCP Tool Bridge
-
-AMP agents can expose capabilities as MCP tools:
-
-```
-AMP Capability: org.agentries.code-review:2.0
-       ↓
-MCP Tool: {
-  "name": "code_review",
-  "description": "...",
-  "inputSchema": {...}
-}
-```
-
-This allows LLM applications using MCP to invoke AMP agent capabilities.
+See: `008-agent-discovery-directory.md`
 
 ---
 
@@ -1454,7 +1265,6 @@ Since ACK can come from either a relay or the final recipient, the ACK body MUST
 - `from` not matching `ack_source` semantics → reject as protocol error
 - Unsigned or invalid signature → reject
 - Unknown relay (not in trusted relay list) → MAY reject or log warning
-```
 
 **Why This Matters**:
 
@@ -1529,6 +1339,18 @@ On no response within timeout:
 | CAP_INVOKE (complex) | Use PROCESSING/PROGRESS |
 | CONTACT_REQUEST | 24h (async approval) |
 
+### 16.5 Confirmation and Persistence Rules
+
+**Definitions**:
+- **Delivery confirmation**: ACK with `ack_source = "relay"` or `"recipient"`.
+- **Processing confirmation**: PROC_OK or PROC_FAIL (or CAP_RESULT for CAP_INVOKE).
+
+**Persistence Rules**:
+- **Senders** MUST retain outbound messages until delivery confirmation or `ts + ttl`, whichever occurs first.
+- **Relays** MUST retain messages until recipient ACK or `ts + ttl`, whichever occurs first.
+- **Relays** MAY delete immediately after recipient ACK.
+- **Recipients** SHOULD retain processed message IDs for at least `ttl` to enforce idempotency.
+
 ---
 
 ## 17. Registry Governance
@@ -1539,7 +1361,6 @@ On no response within timeout:
 |----------|----------|-----------|
 | Message Type Codes | 0x01-0xFF | AMP Specification |
 | Error Codes | 1001-5999 | AMP Specification |
-| Capability Namespaces | org.agentries.* | Namespace owner |
 | Extension Fields | ext.vendor.* | Vendor |
 
 ### 17.2 Allocation Policy
@@ -1554,9 +1375,7 @@ On no response within timeout:
 - x900-x999: Vendor-specific (no registration)
 
 **Capability Namespaces**:
-- Reverse domain names prevent collision
-- No central registration required
-- Owners responsible for their namespace
+- Defined in RFC 004 (Capability Schema Registry & Compatibility)
 
 ### 17.3 Registration Process
 
@@ -1579,12 +1398,19 @@ On no response within timeout:
 
 ## 19. References
 
-- [Agentries](https://agentries.xyz)
+### 19.1 Normative References
+
+- [RFC 2119: Key words for use in RFCs](https://www.rfc-editor.org/rfc/rfc2119.html)
+- [RFC 8174: Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words](https://www.rfc-editor.org/rfc/rfc8174.html)
+- [RFC 3339: Date and Time on the Internet](https://www.rfc-editor.org/rfc/rfc3339.html)
 - [CBOR (RFC 8949)](https://www.rfc-editor.org/rfc/rfc8949.html)
-- [CBOR Deterministic Encoding (RFC 8949 §4.2)](https://www.rfc-editor.org/rfc/rfc8949.html#section-4.2)
 - [CDDL (RFC 8610)](https://www.rfc-editor.org/rfc/rfc8610.html)
 - [Ed25519 (RFC 8032)](https://www.rfc-editor.org/rfc/rfc8032.html)
 - [COSE (RFC 9052)](https://www.rfc-editor.org/rfc/rfc9052.html)
+
+### 19.2 Informative References
+
+- [Agentries](https://agentries.xyz)
 - [NaCl Cryptography](https://nacl.cr.yp.to/)
 - [MTProto](https://core.telegram.org/mtproto)
 - [DIDComm (reference)](https://identity.foundation/didcomm-messaging/spec/)
@@ -1594,31 +1420,254 @@ On no response within timeout:
 
 ---
 
+## Appendix A. Test Vectors
+
+The vectors below use deterministic CBOR (RFC 8949 §4.2). Hex strings are lowercase. Keys are test-only.
+
+### A.1 Common Parameters
+
+- Ed25519 private key (seed): `000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f`
+- Ed25519 public key: `03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8`
+- X25519 recipient private key: `1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100`
+- X25519 recipient public key: `87968c1c1642bd0600f6ad869b88f92c9623d0dfc44f01deffe21c9add3dca5f`
+- X25519 sender static private key: `8f8e8d8c8b8a898887868584838281807f7e7d7c7b7a79787776757473727170`
+- X25519 sender static public key: `46d09ef40df38265c53eb1e834cab2eff2dda6e85866e5a0706348400502f27f`
+- Nonce (24 bytes): `000102030405060708090a0b0c0d0e0f1011121314151617`
+- from: `did:web:example.com:agent:alice`
+- to: `did:web:example.com:agent:bob`
+- ttl: `86400000`
+- Vector DID mapping note: for deterministic fixtures, both example DIDs can resolve to the same signing key in a local test DID document. Production deployments MUST use distinct per-entity keys.
+
+### A.2 Vector 1: MESSAGE (null body)
+
+- ts: `1707055200000`
+- id: `0000018d746b37000000000000000001`
+- typ: `0x10`
+- body_cbor: `f6`
+
+Sig_Input (hex):
+```
+8466414d502d763140a6626964500000018d746b3700000000000000000162746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b37006374746c1a05265c0063747970106466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c69636541f6
+```
+
+Signature (hex):
+```
+ddfe6db4951b1244be2953963b3323d1957bf95f04e123b0e4283fec5267961c6af0752a2e6ccbbfe313d08107c3ccc45a79add798bc4afd1d78f89ae38fdb02
+```
+
+Message (hex):
+```
+a9617601626964500000018d746b3700000000000000000162746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b3700637369675840ddfe6db4951b1244be2953963b3323d1957bf95f04e123b0e4283fec5267961c6af0752a2e6ccbbfe313d08107c3ccc45a79add798bc4afd1d78f89ae38fdb026374746c1a05265c00637479701064626f6479f66466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c696365
+```
+
+### A.3 Vector 2: HELLO
+
+- ts: `1707055201000`
+- id: `0000018d746b3ae80000000000000002`
+- typ: `0x70`
+- body_cbor:
+```
+a36876657273696f6e738263312e3063322e306a6167656e745f696e666fa2646e616d6566616d702d676f6e696d706c656d656e746174696f6e6c616d702d676f2f302e312e306a657874656e73696f6e73816973747265616d696e67
+```
+
+Sig_Input (hex):
+```
+8466414d502d763140a6626964500000018d746b3ae8000000000000000262746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b3ae86374746c1a05265c006374797018706466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c696365585da36876657273696f6e738263312e3063322e306a6167656e745f696e666fa2646e616d6566616d702d676f6e696d706c656d656e746174696f6e6c616d702d676f2f302e312e306a657874656e73696f6e73816973747265616d696e67
+```
+
+Signature (hex):
+```
+3d94b24e329a3cd13847eda767878474a18177179e98d3c5c1eccec5a5c0d391100fbf28c088967bb44dfe0031c4222d40cd6a6f3f57af9719556034b05bab05
+```
+
+Message (hex):
+```
+a9617601626964500000018d746b3ae8000000000000000262746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b3ae86373696758403d94b24e329a3cd13847eda767878474a18177179e98d3c5c1eccec5a5c0d391100fbf28c088967bb44dfe0031c4222d40cd6a6f3f57af9719556034b05bab056374746c1a05265c0063747970187064626f6479a36876657273696f6e738263312e3063322e306a6167656e745f696e666fa2646e616d6566616d702d676f6e696d706c656d656e746174696f6e6c616d702d676f2f302e312e306a657874656e73696f6e73816973747265616d696e676466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c696365
+```
+
+### A.4 Vector 3: ACK
+
+- ts: `1707055202000`
+- id: `0000018d746b3ed00000000000000003`
+- typ: `0x03`
+- reply_to: `0000018d746b37000000000000000001`
+- body_cbor:
+```
+a36a61636b5f736f7572636569726563697069656e746a61636b5f746172676574781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626b72656365697665645f61741b0000018d746b40c4
+```
+
+Sig_Input (hex):
+```
+8466414d502d763140a7626964500000018d746b3ed0000000000000000362746f781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c6963656274731b0000018d746b3ed06374746c1a05265c0063747970036466726f6d781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f62687265706c795f746f500000018d746b370000000000000000015855a36a61636b5f736f7572636569726563697069656e746a61636b5f746172676574781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626b72656365697665645f61741b0000018d746b40c4
+```
+
+Signature (hex):
+```
+d18b0711cfedd531cc4ac1ea26cee7ce31827df504587578b4d50897a4a61582f4eb9bfe20fd11ca84e008df73d33972a672c434d7078daf5d1a866af73fad0d
+```
+
+Message (hex):
+```
+aa617601626964500000018d746b3ed0000000000000000362746f781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c6963656274731b0000018d746b3ed0637369675840d18b0711cfedd531cc4ac1ea26cee7ce31827df504587578b4d50897a4a61582f4eb9bfe20fd11ca84e008df73d33972a672c434d7078daf5d1a866af73fad0d6374746c1a05265c00637479700364626f6479a36a61636b5f736f7572636569726563697069656e746a61636b5f746172676574781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626b72656365697665645f61741b0000018d746b40c46466726f6d781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f62687265706c795f746f500000018d746b37000000000000000001
+```
+
+### A.5 Vector 4: STREAM_START / STREAM_DATA / STREAM_END
+
+- stream_id: `stream-001`
+- chunk bytes: `68656c6c6f`
+- hash (sha256): `2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824`
+
+STREAM_START:
+- ts: `1707055203000`
+- id: `0000018d746b42b80000000000000004`
+- typ: `0x13`
+- body_cbor:
+```
+a76866696c656e616d656968656c6c6f2e74787469686173685f616c676f667368613235366973747265616d5f69646a73747265616d2d3030316a6368756e6b5f73697a65056a746f74616c5f73697a65056c636f6e74656e745f747970656a746578742f706c61696e6c746f74616c5f6368756e6b7301
+```
+- sig_input:
+```
+8466414d502d763140a6626964500000018d746b42b8000000000000000462746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b42b86374746c1a05265c0063747970136466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c6963655878a76866696c656e616d656968656c6c6f2e74787469686173685f616c676f667368613235366973747265616d5f69646a73747265616d2d3030316a6368756e6b5f73697a65056a746f74616c5f73697a65056c636f6e74656e745f747970656a746578742f706c61696e6c746f74616c5f6368756e6b7301
+```
+- signature:
+```
+56ad1b38f984a729a63b8848b88cd9c5a7810e531f799b749d4dc1ad356b81e5aa28e5118d6c2cf4bf94c61bf982c85c0e0f48e46a9e0c13376cb7ce750aa006
+```
+- message:
+```
+a9617601626964500000018d746b42b8000000000000000462746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b42b863736967584056ad1b38f984a729a63b8848b88cd9c5a7810e531f799b749d4dc1ad356b81e5aa28e5118d6c2cf4bf94c61bf982c85c0e0f48e46a9e0c13376cb7ce750aa0066374746c1a05265c00637479701364626f6479a76866696c656e616d656968656c6c6f2e74787469686173685f616c676f667368613235366973747265616d5f69646a73747265616d2d3030316a6368756e6b5f73697a65056a746f74616c5f73697a65056c636f6e74656e745f747970656a746578742f706c61696e6c746f74616c5f6368756e6b73016466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c696365
+```
+
+STREAM_DATA:
+- ts: `1707055203001`
+- id: `0000018d746b42b90000000000000005`
+- typ: `0x14`
+- body_cbor:
+```
+a364646174614568656c6c6f65696e646578006973747265616d5f69646a73747265616d2d303031
+```
+- sig_input:
+```
+8466414d502d763140a6626964500000018d746b42b9000000000000000562746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b42b96374746c1a05265c0063747970146466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c6963655828a364646174614568656c6c6f65696e646578006973747265616d5f69646a73747265616d2d303031
+```
+- signature:
+```
+7ed51a5e33658449836bdfe62a84985f31a3ff409bfacf25f2613c6e94ac99b7a475efbbe57ec2d96db31ead0679e50a4bfd0d2378b0da0e005852b374370102
+```
+- message:
+```
+a9617601626964500000018d746b42b9000000000000000562746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b42b96373696758407ed51a5e33658449836bdfe62a84985f31a3ff409bfacf25f2613c6e94ac99b7a475efbbe57ec2d96db31ead0679e50a4bfd0d2378b0da0e005852b3743701026374746c1a05265c00637479701464626f6479a364646174614568656c6c6f65696e646578006973747265616d5f69646a73747265616d2d3030316466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c696365
+```
+
+STREAM_END:
+- ts: `1707055203002`
+- id: `0000018d746b42ba0000000000000006`
+- typ: `0x15`
+- body_cbor:
+```
+a2646861736858202cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b98246973747265616d5f69646a73747265616d2d303031
+```
+- sig_input:
+```
+8466414d502d763140a6626964500000018d746b42ba000000000000000662746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b42ba6374746c1a05265c0063747970156466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c696365583da2646861736858202cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b98246973747265616d5f69646a73747265616d2d303031
+```
+- signature:
+```
+75056f0085fb7d9cd45599a8093897a154e04f7685fda0e57b2c73d6f4100c6087a3fb7f7e58e344132b78cc54692472b5d295bbfe295ec45d4296c76a0f0a0c
+```
+- message:
+```
+a9617601626964500000018d746b42ba000000000000000662746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b42ba63736967584075056f0085fb7d9cd45599a8093897a154e04f7685fda0e57b2c73d6f4100c6087a3fb7f7e58e344132b78cc54692472b5d295bbfe295ec45d4296c76a0f0a0c6374746c1a05265c00637479701564626f6479a2646861736858202cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b98246973747265616d5f69646a73747265616d2d3030316466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c696365
+```
+
+### A.6 Vector 5: Encrypted MESSAGE (authcrypt)
+
+- ts: `1707055204000`
+- id: `0000018d746b46a00000000000000007`
+- typ: `0x10`
+- body_cbor: `a1636d736766736563726574`
+- ciphertext (tag || ciphertext):
+```
+924706080f2aa18f82f7b18ac051c9884fbc614779749f98c1031101
+```
+
+Sig_Input (hex):
+```
+8466414d502d763140a6626964500000018d746b46a0000000000000000762746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b46a06374746c1a05265c0063747970106466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c6963654ca1636d736766736563726574
+```
+
+Signature (hex):
+```
+f9b70bbd8de3e7aba29b2f7ac2de00d3f5d021b651d687f059a86a0e5b5da7f90a970839892f1ae629c4d4aa1b1ee247ba657cf502d7c621b38950fda5710d09
+```
+
+Message (hex):
+```
+a9617601626964500000018d746b46a0000000000000000762746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b46a063656e63a463616c6778185832353531392d5853616c736132302d506f6c7931333035646d6f646569617574686372797074656e6f6e63655818000102030405060708090a0b0c0d0e0f10111213141516176a63697068657274657874581c924706080f2aa18f82f7b18ac051c9884fbc614779749f98c1031101637369675840f9b70bbd8de3e7aba29b2f7ac2de00d3f5d021b651d687f059a86a0e5b5da7f90a970839892f1ae629c4d4aa1b1ee247ba657cf502d7c621b38950fda5710d096374746c1a05265c0063747970106466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c696365
+```
+
+### A.7 Negative Vectors (Expected Failures)
+
+These vectors are defined as mutations over the positive vectors above.
+
+| Vector | Mutation | Expected Result |
+|--------|----------|-----------------|
+| N1 | Flip any 1 bit in `A.2` signature | Reject with `1002 INVALID_SIGNATURE` |
+| N2 | Keep `A.2` bytes but evaluate with `now > ts + ttl` | Reject with `1003 INVALID_TIMESTAMP` |
+| N3 | In `A.6`, flip 1 byte in `ciphertext` | Reject with `3001 UNAUTHORIZED` (or `1001` if decrypt output is invalid CBOR after implementation pipeline) |
+| N4 | Change `typ` in `A.2` from `0x70` to unassigned value | Reject with `1005 UNKNOWN_TYPE` |
+| N5 | In `A.4` ACK, set `ack_source = "relay"` while `from` is not a trusted relay DID | Reject as protocol error (recommended `1001 INVALID_MESSAGE`) |
+
+---
+
+## Appendix B. Implementation Notes
+
+These notes are non-normative and highlight common interoperability pitfalls.
+
+- Deterministic CBOR: always canonicalize map key order and integer widths before signing; avoid floating point.
+- Null body: when there is no payload, `body` MUST be CBOR null (`0xF6`) and MUST be signed; `body` is absent only when `enc` is present.
+- Sig_Input: include only fields that are present; `null` is not equivalent to an absent `reply_to` or `thread_id`.
+- Encrypted messages: decrypt first, then verify signature on the decrypted bytes; do not re-encode decrypted bytes.
+- Message IDs: first 8 bytes MUST equal `ts` (ms, big-endian); last 8 bytes MUST be CSPRNG output.
+- Replay cache: key by `(sender_did, message_id)` and retain entries for at least `ttl`.
+- Batch processing: validate each inner message independently; use `batch_index` for per-item errors.
+- Streaming: compute hash over concatenated chunk data in index order; handle out-of-order and duplicate chunks idempotently.
+
+---
+
 ## Changelog
 
-| Date | Version | Author | Changes |
-|------|---------|--------|---------|
-| 2026-02-04 | 1.0 | Ryan Cooper | Initial draft |
-| 2026-02-04 | 1.1 | Ryan Cooper | Round 1 feedback from Jason |
-| 2026-02-04 | 2.0 | Ryan Cooper | Major revision: binary protocol (CBOR), capability invocation, document/credential exchange |
-| 2026-02-04 | 2.1 | Ryan Cooper | Added Section 9: Agentries Integration (opt-in AMP discovery via DID Document service); Full English translation |
-| 2026-02-04 | 2.2 | Ryan Cooper, Jason Huang | Three-tier visibility model (PRIVATE/DISCOVERABLE/OPEN); Contact request flow for gated agents |
-| 2026-02-04 | 2.3 | Ryan Cooper | Policy-based auto-approval mechanism for DISCOVERABLE agents; Human-in-the-loop as optional fallback |
-| 2026-02-04 | 3.0 | Ryan Cooper | Major feature additions: Presence & Status (Section 10), Provisional Responses (Section 11), Capability Namespacing & Versioning (Section 12), Protocol Version Negotiation (Section 13), Interoperability with A2A/MCP (Section 14) |
-| 2026-02-04 | 3.1 | Ryan Cooper | Redesigned Presence: capability signals (raw metrics) instead of intent signals (discrete states). Protocol transmits data; UI derives labels. |
-| 2026-02-04 | 3.2 | Ryan Cooper | Consolidated message type code registry (§4.3); unified streaming semantics (STREAM_START/DATA/END); added registry governance reference |
-| 2026-02-04 | 4.0 | Ryan Cooper | Security hardening: deterministic CBOR encoding (§8.1), Sig_structure (§8.1), ts/ttl offline handling (§8.3), replay protection (§8.4). New sections: Error Codes (§15), Acknowledgment Semantics & Idempotency (§16), Registry Governance (§17) |
-| 2026-02-04 | 5.0 | Ryan Cooper | **Security audit fixes**: Two-layer envelope design (§8.1) - inner signature now covers typ/to/ts/ttl/reply_to/thread_id; Sign-then-encrypt with enc_digest binding (§8.6); Extension field security warnings (§8.7); Unified TTL-driven timestamp validation (§8.3) - removed conflicting 5-min rule; Streaming specification (§6.2) - chunk ordering, index base, hash computation standardized; ACK source disambiguation (§16.1) - ack_source field distinguishes relay vs recipient |
-| 2026-02-04 | 5.1 | Ryan Cooper | **Consistency fixes**: Simplified to pure sign-then-encrypt (removed enc_digest from Sig_Input - binding via decrypt-then-verify); Clarified relay envelope as transport-layer only (not in CDDL); Fixed §4.2 timestamp rule to match §8.3 (TTL-driven); Fixed STREAM_END semantics (sender sends, receiver ACKs); Fixed ext reference (§8.1→§8.7); Added ACK from/ack_source consistency requirement |
-| 2026-02-04 | 5.2 | Ryan Cooper | **Boundary conditions**: Sign-then-encrypt implications documented (relay cannot verify, verification order, re-encryption attack); Relay metadata marked out-of-scope (removed example); ACK validation rules as MUST (recipient/relay DID verification, multi-recipient ack_target field) |
-| 2026-02-04 | 5.3 | Ryan Cooper | **Consistency fixes**: ttl now REQUIRED (was optional, caused Sig_Input ambiguity); StE clarified: enc.ciphertext MUST encrypt deterministic_cbor(body) bytes exactly; anoncrypt privacy boundary clarified (does NOT hide from relay, only prevents recipient proving sender to third parties); Removed "Two-Layer Envelope" section (was confusing with out-of-scope relay metadata); Fixed terminology (Sig_structure→Sig_Input); Unified timestamp consistency language (MUST match within ±1s) |
-| 2026-02-04 | 5.4 | Ryan Cooper | **Final consistency pass**: Removed "Default TTL" validation row (ttl is required); §3.2 now references Sig_Input instead of "canonicalized CBOR encoding of message"; anoncrypt description unified across §3.2 and §8.6; "Ciphertext binding" reworded to "Tamper detection" with re-encryption limitation noted; StE rationale no longer mentions "sender hidden"; Added note about partial examples omitting required fields |
-| 2026-02-04 | 5.5 | Ryan Cooper | **Edge case definitions**: TTL=0 semantics defined (no relay storage, immediate forward, reject if offline); §3.2 notes decrypt-then-verify for encrypted messages; §8.2 expanded with explicit deterministic CBOR requirement for unencrypted body signing/verification |
-| 2026-02-04 | 5.6 | Ryan Cooper | **Refinements**: §8.2 now includes explicit numbered steps for encrypted message verification; TTL=0 error changed from 2002 to 2003 (RELAY_REJECTED - policy rejection, not transport failure); §4.1 field notes now consolidates deterministic CBOR requirement for body |
-| 2026-02-04 | 5.7 | Ryan Cooper | **Polish**: §15.3 RELAY_REJECTED description includes policy rejections (e.g., TTL=0); §4.1 field notes clarifies re-encoding is for unencrypted only (encrypted uses raw bytes); §8.2 step 7 points to §8.6 for failure handling |
-| 2026-02-04 | 5.8 | Ryan Cooper | **Clarity**: §8.2 "Important" scoped to unencrypted messages only; §8.6 adds explicit failure handling list (decryption/signature/CBOR failures) |
-| 2026-02-04 | 5.9 | Ryan Cooper | §8.6 failure list: added "Sig_Input reconstruction fails (missing required fields)" |
-| 2026-02-04 | 5.10 | Ryan Cooper | **Error code mapping**: §8.6 failure handling now maps to error codes (1001, 1002, 3001); §8.2 adds parallel failure handling table for unencrypted messages |
-| 2026-02-04 | 5.11 | Ryan Cooper | §15.3 UNAUTHORIZED clarified to include decryption/key mismatch; §8.2 and §8.6 failure tables note "non-retryable" with pointer to §15.3 |
-| 2026-02-04 | 5.12 | Ryan Cooper | §8.2/§8.6 changed to "see §15.3 for retry semantics" (single source of truth); §15.3 UNAUTHORIZED adds privacy note about oracle attack prevention |
-| 2026-02-04 | 5.13 | Ryan Cooper | §8.6 decryption failure row cross-references §15.3 privacy note |
+Versioning note: public version numbers were reset on 2026-02-06 for external publication. `Legacy Version` preserves the previous internal sequence.
+
+| Date | Version | Legacy Version | Author | Changes |
+|------|---------|----------------|--------|---------|
+| 2026-02-04 | 0.1 | 1.0 | Ryan Cooper | Initial draft |
+| 2026-02-04 | 0.2 | 1.1 | Ryan Cooper | Round 1 feedback from Jason |
+| 2026-02-04 | 0.3 | 2.0 | Ryan Cooper | Major revision: binary protocol (CBOR), capability invocation, document/credential exchange |
+| 2026-02-04 | 0.4 | 2.1 | Ryan Cooper | Added Section 9: Agentries Integration (opt-in AMP discovery via DID Document service); Full English translation |
+| 2026-02-04 | 0.5 | 2.2 | Ryan Cooper, Jason Huang | Three-tier visibility model (PRIVATE/DISCOVERABLE/OPEN); Contact request flow for gated agents |
+| 2026-02-04 | 0.6 | 2.3 | Ryan Cooper | Policy-based auto-approval mechanism for DISCOVERABLE agents; Human-in-the-loop as optional fallback |
+| 2026-02-04 | 0.7 | 3.0 | Ryan Cooper | Major feature additions: Presence & Status (Section 10), Provisional Responses (Section 11), Capability Namespacing & Versioning (Section 12), Protocol Version Negotiation (Section 13), Interoperability with A2A/MCP (Section 14) |
+| 2026-02-04 | 0.8 | 3.1 | Ryan Cooper | Redesigned Presence: capability signals (raw metrics) instead of intent signals (discrete states). Protocol transmits data; UI derives labels. |
+| 2026-02-04 | 0.9 | 3.2 | Ryan Cooper | Consolidated message type code registry (§4.3); unified streaming semantics (STREAM_START/DATA/END); added registry governance reference |
+| 2026-02-04 | 0.10 | 4.0 | Ryan Cooper | Security hardening: deterministic CBOR encoding (§8.1), Sig_structure (§8.1), ts/ttl offline handling (§8.3), replay protection (§8.4). New sections: Error Codes (§15), Acknowledgment Semantics & Idempotency (§16), Registry Governance (§17) |
+| 2026-02-04 | 0.11 | 5.0 | Ryan Cooper | **Security audit fixes**: Two-layer envelope design (§8.1) - inner signature now covers typ/to/ts/ttl/reply_to/thread_id; Sign-then-encrypt with enc_digest binding (§8.6); Extension field security warnings (§8.7); Unified TTL-driven timestamp validation (§8.3) - removed conflicting 5-min rule; Streaming specification (§6.2) - chunk ordering, index base, hash computation standardized; ACK source disambiguation (§16.1) - ack_source field distinguishes relay vs recipient |
+| 2026-02-04 | 0.12 | 5.1 | Ryan Cooper | **Consistency fixes**: Simplified to pure sign-then-encrypt (removed enc_digest from Sig_Input - binding via decrypt-then-verify); Clarified relay envelope as transport-layer only (not in CDDL); Fixed §4.2 timestamp rule to match §8.3 (TTL-driven); Fixed STREAM_END semantics (sender sends, receiver ACKs); Fixed ext reference (§8.1→§8.7); Added ACK from/ack_source consistency requirement |
+| 2026-02-04 | 0.13 | 5.2 | Ryan Cooper | **Boundary conditions**: Sign-then-encrypt implications documented (relay cannot verify, verification order, re-encryption attack); Relay metadata marked out-of-scope (removed example); ACK validation rules as MUST (recipient/relay DID verification, multi-recipient ack_target field) |
+| 2026-02-04 | 0.14 | 5.3 | Ryan Cooper | **Consistency fixes**: ttl now REQUIRED (was optional, caused Sig_Input ambiguity); StE clarified: enc.ciphertext MUST encrypt deterministic_cbor(body) bytes exactly; anoncrypt privacy boundary clarified (does NOT hide from relay, only prevents recipient proving sender to third parties); Removed "Two-Layer Envelope" section (was confusing with out-of-scope relay metadata); Fixed terminology (Sig_structure→Sig_Input); Unified timestamp consistency language (MUST match within ±1s) |
+| 2026-02-04 | 0.15 | 5.4 | Ryan Cooper | **Final consistency pass**: Removed "Default TTL" validation row (ttl is required); §3.2 now references Sig_Input instead of "canonicalized CBOR encoding of message"; anoncrypt description unified across §3.2 and §8.6; "Ciphertext binding" reworded to "Tamper detection" with re-encryption limitation noted; StE rationale no longer mentions "sender hidden"; Added note about partial examples omitting required fields |
+| 2026-02-04 | 0.16 | 5.5 | Ryan Cooper | **Edge case definitions**: TTL=0 semantics defined (no relay storage, immediate forward, reject if offline); §3.2 notes decrypt-then-verify for encrypted messages; §8.2 expanded with explicit deterministic CBOR requirement for unencrypted body signing/verification |
+| 2026-02-04 | 0.17 | 5.6 | Ryan Cooper | **Refinements**: §8.2 now includes explicit numbered steps for encrypted message verification; TTL=0 error changed from 2002 to 2003 (RELAY_REJECTED - policy rejection, not transport failure); §4.1 field notes now consolidates deterministic CBOR requirement for body |
+| 2026-02-04 | 0.18 | 5.7 | Ryan Cooper | **Polish**: §15.3 RELAY_REJECTED description includes policy rejections (e.g., TTL=0); §4.1 field notes clarifies re-encoding is for unencrypted only (encrypted uses raw bytes); §8.2 step 7 points to §8.6 for failure handling |
+| 2026-02-04 | 0.19 | 5.8 | Ryan Cooper | **Clarity**: §8.2 "Important" scoped to unencrypted messages only; §8.6 adds explicit failure handling list (decryption/signature/CBOR failures) |
+| 2026-02-04 | 0.20 | 5.9 | Ryan Cooper | §8.6 failure list: added "Sig_Input reconstruction fails (missing required fields)" |
+| 2026-02-04 | 0.21 | 5.10 | Ryan Cooper | **Error code mapping**: §8.6 failure handling now maps to error codes (1001, 1002, 3001); §8.2 adds parallel failure handling table for unencrypted messages |
+| 2026-02-04 | 0.22 | 5.11 | Ryan Cooper | §15.3 UNAUTHORIZED clarified to include decryption/key mismatch; §8.2 and §8.6 failure tables note "non-retryable" with pointer to §15.3 |
+| 2026-02-04 | 0.23 | 5.12 | Ryan Cooper | §8.2/§8.6 changed to "see §15.3 for retry semantics" (single source of truth); §15.3 UNAUTHORIZED adds privacy note about oracle attack prevention |
+| 2026-02-04 | 0.24 | 5.13 | Ryan Cooper | §8.6 decryption failure row cross-references §15.3 privacy note |
+| 2026-02-06 | 0.25 | 5.14 | Nowa | Clarified body/enc exclusivity and null payload signing; defined encrypted-payload CDDL; specified message-id encoding; added normative language; aligned version negotiation with major `v`; documented AgentMessagingGated service type |
+| 2026-02-06 | 0.26 | 5.15 | Nowa | Added TOC and terminology; added CDDL for message bodies; defined batch messages; added state machines for key flows; added privacy considerations; clarified confirmation/persistence rules; split references into normative/informative; aligned examples with capability IDs |
+| 2026-02-06 | 0.27 | 5.16 | Nowa | Moved discovery/presence/provisional/capability details to RFCs 004/006/008; slimmed core CDDL to core message bodies; added cross-RFC pointers |
+| 2026-02-06 | 0.28 | 5.17 | Nowa | Added conformance criteria and test vectors/implementation notes for AMP Core |
+| 2026-02-06 | 0.29 | 5.18 | Nowa | Clarified authcrypt/anoncrypt byte-level profiles and verification steps; added DID key selection policy; fixed ACK section markdown; added negative test vectors and test DID mapping note |
+| 2026-02-06 | 0.30 | 5.19 | Nowa | Simplified AMP 001 to a single encryption profile (`authcrypt`); removed anoncrypt-specific rules; updated encrypted test vector to authcrypt |

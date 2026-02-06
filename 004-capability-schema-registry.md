@@ -1,9 +1,10 @@
 # RFC 004: Capability Schema Registry & Compatibility
 
-**Status**: Proposal (Not Yet Drafted)  
+**Status**: Draft  
 **Authors**: TBD  
 **Created**: 2026-02-04  
 **Updated**: 2026-02-06  
+**Depends On**: RFC 001 (AMP)
 
 ---
 
@@ -133,7 +134,179 @@ capability:
 
 ---
 
-## 4. Open Questions
+## 4. Capability Identifier Format
+
+Capabilities use reverse-domain namespacing with semantic versioning:
+
+```
+<namespace>.<capability>:<major>.<minor>
+
+Examples:
+  org.agentries.code-review:2.0
+  com.acme.data-analysis:1.3
+  io.github.user.custom-tool:0.1
+```
+
+---
+
+## 5. Namespace Governance
+
+**Principle**: Capability identifiers are globally unique within their namespace. Namespace owners are responsible for stability and backward compatibility.
+
+**Rules**:
+- Use reverse-domain namespaces to prevent collisions (e.g., `org.agentries.*`).
+- No central registration required for namespace ownership.
+- Namespace owners SHOULD publish schema and versioning policies.
+- Conflicts within a namespace are resolved by the namespace owner.
+
+---
+
+## 6. Capability Message Types
+
+### 6.1 CAP_QUERY
+
+```cbor
+{
+  "typ": 0x20,  ; CAP_QUERY
+  "body": {
+    "filter": {
+      "capability": "org.agentries.code-review",
+      "version": ">=2.0 <3.0"  ; semver range
+    }
+  }
+}
+```
+
+### 6.2 CAP_DECLARE
+
+```cbor
+{
+  "typ": 0x21,  ; CAP_DECLARE
+  "body": {
+    "capabilities": [
+      {
+        "id": "org.agentries.code-review:2.1",
+        "deprecated_versions": ["1.0", "1.1"],
+        "input_schema": "https://schema.agentries.xyz/code-review/2.1/input.json",
+        "output_schema": "https://schema.agentries.xyz/code-review/2.1/output.json"
+      }
+    ]
+  }
+}
+```
+
+### 6.3 CAP_INVOKE / CAP_RESULT
+
+```cbor
+; Request
+{
+  "typ": 0x22,  ; CAP_INVOKE
+  "body": {
+    "capability": "org.agentries.code-review",
+    "version": "2.0",
+    "params": {
+      "code": "fn main() {...}",
+      "language": "rust"
+    },
+    "timeout_ms": 30000
+  }
+}
+
+; Response
+{
+  "typ": 0x23,  ; CAP_RESULT
+  "body": {
+    "status": "success",
+    "result": {
+      "issues": [...],
+      "suggestions": [...]
+    }
+  }
+}
+```
+
+**Note**: `capability` is the preferred field name; `type` is a legacy alias for backward compatibility.
+
+### 6.4 Message Body Schemas (CDDL)
+
+```cddl
+semver = tstr
+semver-range = tstr
+capability-name = tstr
+capability-id = tstr
+
+cap-filter = {
+  ? "capability": capability-name,
+  ? "type": tstr,
+  ? "version": semver-range
+}
+
+cap-query-body = {
+  "filter": cap-filter
+}
+
+capability-decl = {
+  "id": capability-id,
+  ? "deprecated_versions": [* semver],
+  ? "input_schema": tstr,
+  ? "output_schema": tstr
+}
+
+cap-declare-body = {
+  "capabilities": [+ capability-decl]
+}
+
+cap-invoke-body = {
+  ? "id": capability-id,
+  ? "capability": capability-name,
+  ? "type": tstr,
+  ? "version": semver,
+  "params": any,
+  ? "timeout_ms": uint
+}
+
+cap-result-body = {
+  "status": "success" / "error",
+  ? "result": any,
+  ? "error": any
+}
+```
+
+**Schema Notes**:
+- `cap-filter` MUST include either `capability` or `type`. If both are present, `capability` takes precedence.
+- `cap-invoke-body` MUST include either `id` or (`capability`/`type` + `version`).
+
+---
+
+## 7. Capability Invocation State Machine
+
+**Sender (Invoker)**:
+```
+IDLE
+  └─ CAP_INVOKE → AWAIT_RESULT
+AWAIT_RESULT
+  ├─ (optional) ACK/PROCESSING/PROGRESS → AWAIT_RESULT
+  ├─ CAP_RESULT(status=success|error) → DONE
+  └─ ERROR → DONE
+```
+
+**Recipient (Executor)**:
+```
+RECEIVE
+  ├─ (optional) ACK → PROCESS
+PROCESS
+  ├─ (optional) PROCESSING/PROGRESS → PROCESS
+  └─ CAP_RESULT(status=success|error) → DONE
+```
+
+**Rules**:
+- Each `CAP_INVOKE` MUST yield exactly one `CAP_RESULT`.
+- `PROCESSING` and `PROGRESS` are optional and MUST include `reply_to`.
+- `PROC_OK`/`PROC_FAIL` are not substitutes for `CAP_RESULT`; use `CAP_RESULT` for final outcome.
+
+---
+
+## 8. Open Questions
 
 1. **Schema enforcement**: Strict validation or best-effort?
 2. **Backward compatibility policy**: How many versions to support?
@@ -142,7 +315,7 @@ capability:
 
 ---
 
-## 5. Implementation Roadmap
+## 9. Implementation Roadmap
 
 ### Phase 1: Schema Registry
 - [ ] Define schema format
