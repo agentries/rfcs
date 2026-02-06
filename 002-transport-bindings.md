@@ -4,7 +4,7 @@
 **Authors**: Ryan Cooper, Nowa
 **Created**: 2026-02-05
 **Updated**: 2026-02-06
-**Version**: 0.7
+**Version**: 0.9
 
 ---
 
@@ -43,7 +43,10 @@ This RFC defines AMP transport bindings with a TCP-first normative model. AMPS (
 6.2 Polling Wrapper (Normative)
 6.3 Webhook Wrapper (Normative)
 6.4 HTTP Status Mapping
+6.5 Relay Federation Forward Wrapper (Normative)
+6.6 Relay Commit Report Wrapper (Normative)
 7. Transport Authentication and DID Binding
+7.3 Relay Federation Binding Rule
 8. Error Handling and Retry
 9. Versioning and Compatibility
 10. Security Considerations
@@ -63,6 +66,7 @@ This RFC defines:
 - Transport handshake, frame boundaries, size negotiation, and keepalive behavior.
 - Binding-specific error/status mapping to RFC 001 error categories.
 - Conformance requirements for agents and relays.
+- Relay-to-relay handoff transport wrapper for RFC 003 federation interoperability.
 
 ### 1.2 Non-Goals
 
@@ -92,6 +96,7 @@ A transport implementation is conformant only if it:
 | Application ACK | AMP `ACK`/`PROC_*` semantics in RFC 001 Section 16. |
 | Transport principal | Identity established by transport auth (token subject, mTLS identity). |
 | Effective max size | `min(sender_max, receiver_max)` bytes. |
+| Relay-forward wrapper | Transport object carrying raw AMP bytes with federation metadata. |
 
 ### 2.2 Role Profiles and MTI Requirements
 
@@ -106,6 +111,11 @@ A transport implementation is conformant only if it:
 - MUST support HTTP polling endpoint with the normative wrapper in Section 6.2.
 - SHOULD support WebSocket endpoint.
 - SHOULD support webhook push with the normative wrapper in Section 6.3.
+
+`Relay Federation Extension` (when claiming RFC 003 Federation Profile):
+- MUST support HTTP `POST /amp/v1/relay/forward` with wrapper in Section 6.5.
+- MUST support HTTP `POST /amp/v1/relay/commit` with wrapper in Section 6.6 for dual-custody feedback.
+- MUST return transfer acceptance via authenticated transfer-receipt payload (RFC 003 Section 4.1).
 
 Rationale: HTTP MTI guarantees minimum cross-vendor interoperability; AMPS canonical semantics guarantee performance and precise transport behavior.
 
@@ -129,8 +139,8 @@ Requirements:
 ### 3.2 Frame Model and Limits
 
 Transport MUST preserve AMP boundaries:
-- One transport message unit carries exactly one AMP payload.
-- Sender MUST NOT coalesce multiple AMP payloads in one transport unit.
+- One transport message unit carries exactly one canonical payload (`amp-message` or Section 6.5 `relay-forward` wrapper).
+- Sender MUST NOT coalesce multiple canonical payloads in one transport unit.
 - Receiver MUST reject partial/truncated payloads.
 
 All conformant implementations MUST accept at least 1 MiB inbound payload.
@@ -394,6 +404,85 @@ Receiver MUST verify:
 | 500 | Internal failure | 5001 |
 | 503 | Temporarily unavailable | 2003 |
 
+### 6.5 Relay Federation Forward Wrapper (Normative)
+
+Relay-to-relay handoff endpoint:
+
+```http
+POST /amp/v1/relay/forward HTTP/1.1
+Content-Type: application/cbor
+Accept: application/cbor
+Authorization: Bearer <relay-token>
+X-AMP-Transport-Version: 1
+
+<CBOR relay-forward>
+```
+
+Relay-forward wrapper CDDL:
+
+```cddl
+relay-forward = {
+  "fwd_v": 1,
+  "message": bstr,                 ; raw full CBOR amp-message bytes
+  "from_did": tstr,
+  "recipient_did": tstr,
+  "relay_path": [* tstr],
+  "hop_limit": uint,
+  "upstream_relay": tstr,
+  "transfer_mode": "single" / "dual"
+}
+
+relay-forward-response = {
+  "accepted": bool,
+  ? "receipt": bstr,               ; transfer-receipt (RFC 003 Section 4.1)
+  ? "error_code": uint,
+  ? "error_message": tstr
+}
+```
+
+Rules:
+- `fwd_v` MUST be `1`; unsupported values MUST be rejected (`1004` hint).
+- `message` MUST be byte-identical AMP payload.
+- `from_did` and `recipient_did` MUST match AMP envelope `from` and intended recipient.
+- `hop_limit` MUST be present and decremented by sender relay before forward.
+- Receiver MUST validate wrapper consistency before queueing/forwarding.
+- If `accepted=true`, `receipt` MUST be present and MUST be cryptographically verifiable.
+- If `accepted=false`, `receipt` MUST NOT be present and `error_code` SHOULD be present.
+
+### 6.6 Relay Commit Report Wrapper (Normative)
+
+Dual-custody downstream commit feedback endpoint:
+
+```http
+POST /amp/v1/relay/commit HTTP/1.1
+Content-Type: application/cbor
+Accept: application/cbor
+Authorization: Bearer <relay-token>
+X-AMP-Transport-Version: 1
+
+<CBOR relay-commit-report>
+```
+
+Commit report wrapper CDDL:
+
+```cddl
+relay-commit-report = {
+  "commit_v": 1,
+  "commit_receipt": bstr          ; commit-receipt (RFC 003 Section 4.3)
+}
+
+relay-commit-report-response = {
+  "accepted": bool,
+  ? "error_code": uint,
+  ? "error_message": tstr
+}
+```
+
+Rules:
+- `commit_v` MUST be `1`; unsupported values MUST be rejected (`1004` hint).
+- Receiver MUST verify `commit_receipt` per RFC 003 Section 4.3 before accepting state transition.
+- If `accepted=false`, receiver MUST NOT change custody state.
+
 ---
 
 ## 7. Transport Authentication and DID Binding
@@ -419,6 +508,27 @@ Relays MUST:
 
 Failure mapping:
 - Unauthorized principal/from binding -> `3001` (HTTP 401/403, WS 1008, TCP ERROR then close).
+
+### 7.3 Relay Federation Binding Rule
+
+For `POST /amp/v1/relay/forward`:
+- `transport principal DID` MUST equal `relay-forward.upstream_relay`.
+- Principal/from strict equality does not apply between transport principal and AMP envelope `from` for this endpoint.
+- Endpoint MUST be restricted to trusted relay identities by policy.
+- Receiver MUST emit auditable tuple:
+  `(principal_relay_did, upstream_relay_did, amp_from_did, recipient_did, message_id)`.
+
+Failure mapping:
+- Principal mismatch with `upstream_relay` or untrusted relay identity -> `3001`.
+
+For `POST /amp/v1/relay/commit`:
+- `transport principal DID` MUST equal `commit-receipt.downstream_relay`.
+- Endpoint MUST only accept reports for previously accepted dual-custody transfers.
+- Receiver MUST emit auditable tuple:
+  `(principal_relay_did, downstream_relay_did, upstream_relay_did, amp_from_did, recipient_did, message_id)`.
+
+Failure mapping:
+- Principal mismatch with commit-receipt downstream relay, unknown transfer context, or untrusted relay identity -> `3001`.
 
 ---
 
@@ -457,6 +567,7 @@ Recommended reconnect backoff:
 
 Binding version is independent from AMP message version:
 - Binding version: transport behavior (`amp.v1`, `X-AMP-Transport-Version`, handshake.version).
+- Federation wrapper versions: `fwd_v` (Section 6.5) and `commit_v` (Section 6.6), currently fixed at `1`.
 - AMP version: RFC 001 message header `v` plus HELLO negotiation.
 
 Implementations MUST validate both dimensions.
@@ -477,12 +588,14 @@ Implementations MUST validate both dimensions.
 ## 11. Implementation Checklist
 
 - [ ] Meets role MTI requirements in Section 2.2.
-- [ ] Preserves one transport unit = one AMP payload.
+- [ ] Preserves one transport unit = one canonical payload.
 - [ ] Supports inbound payload at least 1 MiB.
 - [ ] Negotiates/enforces effective max size.
 - [ ] Enforces HELLO sequencing rules for persistent channels.
 - [ ] Enforces transport principal vs `from` DID policy.
 - [ ] Implements fixed polling/webhook wrappers if supported.
+- [ ] Implements relay-forward wrapper if claiming federation support.
+- [ ] Implements relay-commit wrapper if claiming federation support.
 - [ ] Maps errors to canonical categories in Section 8.
 - [ ] Passes Appendix A vectors for claimed bindings.
 
@@ -493,6 +606,7 @@ Implementations MUST validate both dimensions.
 ### 12.1 Normative References
 
 - RFC 001: Agent Messaging Protocol (Core)
+- RFC 003: Relay & Store-and-Forward
 - RFC 2119: Key words for use in RFCs
 - RFC 8174: Ambiguity of uppercase/lowercase in RFC 2119 keywords
 - RFC 6455: The WebSocket Protocol
@@ -502,6 +616,7 @@ Implementations MUST validate both dimensions.
 
 ### 12.2 Informative References
 
+- RFC 008: Agent Discovery & Directory
 - RFC 7231: HTTP/1.1 Semantics and Content (historical)
 - RFC 5246: TLS 1.2 (legacy interoperability)
 
@@ -564,10 +679,52 @@ Expected:
 - Connection MAY be closed by policy.
 - Error mapping SHOULD indicate unsupported/invalid protocol state (recommended `1004` or binding-local protocol error mapped to `1001`).
 
+### A.8 Relay-Forward Wrapper Positive
+
+Given valid `relay-forward` with:
+- tuple match (`from_did`, `recipient_did`, `message.id` linkage)
+- trusted `upstream_relay`
+- `hop_limit > 0`
+
+Expected:
+- receiver accepts and returns `relay-forward-response.accepted = true`
+- response includes verifiable `receipt`
+
+### A.9 Relay-Forward Principal Mismatch Negative
+
+Given:
+- transport principal DID = `did:web:relay-a.example`
+- `relay-forward.upstream_relay = did:web:relay-b.example`
+
+Expected:
+- reject with auth failure mapping (`3001` hint)
+- no queue insertion or downstream forward
+
+### A.10 Relay-Commit Wrapper Positive
+
+Given valid `relay-commit-report` where:
+- `commit_v=1`
+- `commit_receipt` signature and tuple validation succeed
+- transport principal equals commit-receipt `downstream_relay`
+
+Expected:
+- receiver accepts commit report
+- upstream custody state may transition (per RFC 003 dual-custody rules)
+
+### A.11 Relay-Commit Principal Mismatch Negative
+
+Given:
+- transport principal DID != commit-receipt `downstream_relay`
+
+Expected:
+- reject with auth failure mapping (`3001` hint)
+- no custody state update
+
 ---
 
 ## Appendix B. Open Questions
 
 1. Should Relay Profile additionally require WebSocket (`MUST`) once interop test coverage matures?
 2. Should AMPS define mandatory congestion-control and backpressure signaling in this RFC or a follow-up?
-3. Should webhook wrapper include optional batch delivery in this RFC or defer to RFC 003?
+3. Should federation wrapper receive an AMPS-native frame mapping in this RFC or a follow-up?
+4. Should webhook wrapper include optional batch delivery in this RFC or defer to RFC 003?

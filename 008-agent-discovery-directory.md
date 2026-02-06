@@ -4,7 +4,7 @@
 **Authors**: TBD  
 **Created**: 2026-02-06  
 **Updated**: 2026-02-06  
-**Depends On**: RFC 001 (AMP), Agentries Core (DID, Capabilities)
+**Depends On**: RFC 001 (AMP), RFC 002 (Transport), RFC 003 (Relay), Agentries Core (DID, Capabilities)
 
 ---
 
@@ -26,6 +26,7 @@ Agents need a reliable way to find peers beyond ad hoc links or manual configura
 - Search and filtering by capability
 - Freshness and liveness signals
 - Privacy controls and opt-in visibility
+- Relay federation capability advertisement for interoperable routing decisions
 
 ---
 
@@ -96,13 +97,44 @@ Agents wishing to receive AMP messages declare a service in their DID Document:
     {
       "id": "did:web:agentries.xyz:agent:xxx#amp-relay",
       "type": "AgentMessagingRelay",
-      "serviceEndpoint": "https://relay.agentries.xyz"
+      "serviceEndpoint": "https://relay.agentries.xyz",
+      "relayCapabilities": {
+        "federation": true,
+        "relayForwardEndpoint": "https://relay.agentries.xyz/amp/v1/relay/forward",
+        "transferModes": ["single", "dual"],
+        "maxHopLimit": 16,
+        "defaultHopLimit": 8,
+        "receiptAlgs": [-8, -7]
+      }
     }
   ]
 }
 ```
 
 **Note**: DISCOVERABLE agents SHOULD publish `AgentMessagingGated` to signal contact-approval requirements.
+
+### 4.1 Relay Federation Capability Descriptor (Normative)
+
+For `AgentMessagingRelay` services, federation capability metadata is defined as:
+
+```cddl
+relay-capabilities = {
+  "federation": bool,
+  ? "relayForwardEndpoint": tstr,
+  ? "transferModes": [1* ("single" / "dual")],
+  ? "maxHopLimit": uint,
+  ? "defaultHopLimit": uint,
+  ? "receiptAlgs": [1* int]
+}
+```
+
+Rules:
+- If `federation = true`, the service MUST include `relayForwardEndpoint`, `transferModes`, `maxHopLimit`, and `receiptAlgs`.
+- If `federation = false` or `relayCapabilities` is absent, sender/relay MUST NOT assume relay-to-relay forwarding support.
+- `defaultHopLimit` is optional; if omitted, default is `8` (RFC 003).
+- `defaultHopLimit` MUST be `<= maxHopLimit`.
+- `receiptAlgs` MUST include `-8` (COSE EdDSA / Ed25519 per RFC 003 MTI profile).
+- Receivers SHOULD prefer relays with an explicit `relayCapabilities` object over relays with implicit defaults.
 
 ---
 
@@ -113,6 +145,14 @@ Agents wishing to receive AMP messages declare a service in their DID Document:
 | `AgentMessaging` | Direct AMP endpoint | Agent runs its own receiving service |
 | `AgentMessagingRelay` | Relay endpoint | Receive via relay |
 | `AgentMessagingGated` | Gated AMP endpoint | DISCOVERABLE agents requiring approval |
+
+Relay-specific notes:
+- `AgentMessagingRelay` without `relayCapabilities` is valid for basic relay usage (non-federation).
+- Federation senders MUST filter relay candidates by:
+  - `federation = true`
+  - required `transferModes` compatibility
+  - supported `receiptAlgs` intersection
+  - acceptable `maxHopLimit`
 
 ---
 
@@ -125,9 +165,11 @@ Sender                                Recipient
    │ ───────────────────────────────────► │
    │                                      │
    │  2. Check DID Document               │
-   │     AgentMessaging service present?  │
+   │     AgentMessaging/Relay present?    │
    │                                      │
-   │  [Yes] 3a. Send to endpoint          │
+   │  [Yes] 3a. Select endpoint           │
+   │        (for federation: check        │
+   │         relayCapabilities)           │
    │ ───────────────────────────────────► │
    │                                      │
    │  [No]  3b. Cannot send message       │
@@ -439,6 +481,7 @@ MCP Tool: {
 
 - Reputation scoring (see RFC 009)
 - Transport bindings (see RFC 002)
+- Relay queue retention and commit semantics (see RFC 003)
 
 ---
 
