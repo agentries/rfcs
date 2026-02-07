@@ -22,6 +22,7 @@ pub const TYPE_HELLO: u8 = 0x70;
 pub const TYPE_HELLO_ACK: u8 = 0x71;
 pub const TYPE_HELLO_REJECT: u8 = 0x72;
 pub const MAX_FRAME_SIZE: usize = 8 * 1024 * 1024;
+pub const TRANSPORT_WRAPPER_VERSION_V1: u64 = 1;
 
 pub fn now_ms() -> u64 {
     SystemTime::now()
@@ -345,6 +346,32 @@ pub struct TextMessageBody {
     pub msg: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PollResponse {
+    pub messages: Vec<ByteBuf>,
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TransferMode {
+    Single,
+    Dual,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RelayForward {
+    pub fwd_v: u64,
+    pub message: ByteBuf,
+    pub from_did: String,
+    pub recipient_did: String,
+    pub relay_path: Vec<String>,
+    pub hop_limit: u64,
+    pub upstream_relay: String,
+    pub transfer_mode: TransferMode,
+}
+
 pub fn make_message_id(ts_ms: u64, random_tail: u64) -> [u8; 16] {
     let mut id = [0_u8; 16];
     id[..8].copy_from_slice(&ts_ms.to_be_bytes());
@@ -615,6 +642,72 @@ pub fn peek_routing(wire_bytes: &[u8]) -> Result<RoutingEnvelope, AmpError> {
             })
         }
     }
+}
+
+pub fn decode_ws_binary_message_unit(payload: &[u8]) -> Result<RoutingEnvelope, AmpError> {
+    if payload.is_empty() {
+        return Err(AmpError::invalid_message(
+            "websocket binary payload must not be empty",
+        ));
+    }
+    peek_routing(payload)
+}
+
+pub fn reject_ws_text_message() -> AmpError {
+    AmpError::invalid_message("websocket text messages are not supported for AMP")
+}
+
+pub fn decode_poll_response(bytes: &[u8]) -> Result<PollResponse, AmpError> {
+    let wrapper: PollResponse = serde_cbor::from_slice(bytes)
+        .map_err(|e| AmpError::invalid_message(format!("invalid poll wrapper: {e}")))?;
+
+    for (idx, raw_msg) in wrapper.messages.iter().enumerate() {
+        parse_wire(raw_msg.as_ref()).map_err(|e| {
+            AmpError::invalid_message(format!(
+                "poll wrapper messages[{idx}] is not a valid AMP message: {e}"
+            ))
+        })?;
+    }
+
+    Ok(wrapper)
+}
+
+pub fn decode_relay_forward(bytes: &[u8]) -> Result<RelayForward, AmpError> {
+    let wrapper: RelayForward = serde_cbor::from_slice(bytes)
+        .map_err(|e| AmpError::invalid_message(format!("invalid relay-forward wrapper: {e}")))?;
+
+    if wrapper.fwd_v != TRANSPORT_WRAPPER_VERSION_V1 {
+        return Err(AmpError::unsupported_version(format!(
+            "unsupported relay-forward fwd_v={}, expected {}",
+            wrapper.fwd_v, TRANSPORT_WRAPPER_VERSION_V1
+        )));
+    }
+    if wrapper.hop_limit == 0 {
+        return Err(AmpError::invalid_message(
+            "relay-forward hop_limit must be > 0",
+        ));
+    }
+    if wrapper.upstream_relay.is_empty() {
+        return Err(AmpError::unauthorized(
+            "relay-forward upstream_relay is required",
+        ));
+    }
+
+    let routing = peek_routing(wrapper.message.as_ref())?;
+    if routing.from != wrapper.from_did {
+        return Err(AmpError::invalid_message(format!(
+            "relay-forward from_did mismatch: wrapper={} message={}",
+            wrapper.from_did, routing.from
+        )));
+    }
+    if !routing.to.iter().any(|did| did == &wrapper.recipient_did) {
+        return Err(AmpError::invalid_message(format!(
+            "relay-forward recipient_did {} not found in message to field",
+            wrapper.recipient_did
+        )));
+    }
+
+    Ok(wrapper)
 }
 
 fn parse_wire(bytes: &[u8]) -> Result<InboundWire, AmpError> {
@@ -983,5 +1076,96 @@ mod tests {
         assert_eq!(routing.from, alice.did);
         assert_eq!(routing.to, vec![bob.did]);
         assert_eq!(routing.typ, TYPE_MESSAGE);
+    }
+
+    #[test]
+    fn tc_transport_002_tcp_frame_boundary_checks() {
+        let payload = b"amp-transport-002".to_vec();
+        let mut framed = Vec::new();
+        write_frame(&mut framed, &payload).expect("write frame");
+        framed.pop();
+
+        let mut cursor = Cursor::new(framed);
+        let err = read_frame(&mut cursor).expect_err("truncated frame must fail");
+        assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof);
+    }
+
+    #[test]
+    fn tc_transport_003_websocket_mapping_rules() {
+        let (alice, bob, resolver) = setup();
+        let ts = 1_707_055_206_000_u64;
+        let body = TextMessageBody {
+            msg: "ws-binary".to_string(),
+        };
+        let meta = MessageMeta {
+            v: 1,
+            id: make_message_id(ts, 6),
+            typ: TYPE_MESSAGE,
+            ts_ms: ts,
+            ttl_ms: 86_400_000,
+            from: String::new(),
+            to: Recipients::One(bob.did.clone()),
+            reply_to: None,
+            thread_id: None,
+        };
+
+        let wire = build_authcrypt_signed(&alice, &bob.did, meta, &body, &resolver).expect("build");
+        let routing = decode_ws_binary_message_unit(&wire).expect("ws binary mapping");
+        assert_eq!(routing.from, alice.did);
+        assert_eq!(routing.to, vec![bob.did]);
+
+        let err = reject_ws_text_message();
+        assert_eq!(err.code, 1001);
+    }
+
+    #[test]
+    fn tc_transport_004_http_wrapper_validation() {
+        let (alice, bob, resolver) = setup();
+        let ts = 1_707_055_207_000_u64;
+        let body = TextMessageBody {
+            msg: "http-wrapper".to_string(),
+        };
+        let meta = MessageMeta {
+            v: 1,
+            id: make_message_id(ts, 7),
+            typ: TYPE_MESSAGE,
+            ts_ms: ts,
+            ttl_ms: 86_400_000,
+            from: String::new(),
+            to: Recipients::One(bob.did.clone()),
+            reply_to: None,
+            thread_id: None,
+        };
+        let wire = build_authcrypt_signed(&alice, &bob.did, meta, &body, &resolver).expect("build");
+
+        let poll = PollResponse {
+            messages: vec![ByteBuf::from(wire.clone())],
+            next_cursor: Some("cur-1".to_string()),
+            has_more: false,
+        };
+        let poll_bytes = serde_cbor::to_vec(&poll).expect("encode poll wrapper");
+        let decoded_poll = decode_poll_response(&poll_bytes).expect("decode poll wrapper");
+        assert_eq!(decoded_poll.messages.len(), 1);
+
+        let relay_forward = RelayForward {
+            fwd_v: TRANSPORT_WRAPPER_VERSION_V1,
+            message: ByteBuf::from(wire.clone()),
+            from_did: alice.did.clone(),
+            recipient_did: bob.did.clone(),
+            relay_path: vec!["did:web:example.com:relay:a".to_string()],
+            hop_limit: 8,
+            upstream_relay: "did:web:example.com:relay:a".to_string(),
+            transfer_mode: TransferMode::Single,
+        };
+        let rf_bytes = serde_cbor::to_vec(&relay_forward).expect("encode relay-forward");
+        let parsed = decode_relay_forward(&rf_bytes).expect("decode relay-forward");
+        assert_eq!(parsed.fwd_v, TRANSPORT_WRAPPER_VERSION_V1);
+        assert_eq!(parsed.recipient_did, bob.did);
+
+        let mut unsupported = relay_forward;
+        unsupported.fwd_v = 2;
+        let unsupported_bytes = serde_cbor::to_vec(&unsupported).expect("encode unsupported");
+        let err = decode_relay_forward(&unsupported_bytes).expect_err("fwd_v must be rejected");
+        assert_eq!(err.code, 1004);
     }
 }

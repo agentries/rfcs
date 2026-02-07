@@ -432,7 +432,8 @@ AMP agents MAY expose an A2A-compatible Agent Card for discovery in the A2A ecos
   },
   "capabilities": [
     {
-      "name": "code-review",
+      "id": "org.agentries.code-review:2.1.0",
+      "name": "org.agentries.code-review",
       "description": "Review code for issues and suggestions"
     }
   ]
