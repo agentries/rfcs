@@ -4,7 +4,7 @@
 **Authors**: Nowa
 **Created**: 2026-02-06
 **Updated**: 2026-02-07
-**Version**: 0.5
+**Version**: 0.6
 
 ---
 
@@ -35,6 +35,7 @@ This RFC defines relay queueing, retention, delivery, and commit semantics for A
 4.1 Transfer Receipt Object
 4.2 Transfer Receipt Algorithm Profile (MTI)
 4.3 Commit Receipt Object (Dual-Custody)
+4.4 Commit Receipt Algorithm Profile (MTI)
 5. Relay Semantics
 5.1 Ingress Acceptance
 5.2 Retention and Expiry
@@ -244,6 +245,16 @@ Validation requirements:
 - `msg_id`, `from_did`, `recipient_did`, and `upstream_relay` MUST match prior accepted transfer context.
 - Protected header `alg` and `kid` constraints are identical to Section 4.1.
 
+### 4.4 Commit Receipt Algorithm Profile (MTI)
+
+To avoid dual-custody interoperability drift, commit-receipt signing algorithms are profile-constrained:
+
+- Signers and verifiers in Federation Profile MUST implement COSE `alg = -8` (EdDSA) with OKP `crv = Ed25519`.
+- Implementations SHOULD additionally support COSE `alg = -7` (ES256, P-256) for compatibility with existing PKI fleets.
+- A receiver MUST reject commit receipts using unsupported algorithms with `3001`.
+- If federation is configured by explicit out-of-band trust policy and RFC 008 capability metadata is unavailable, implementations MUST assume Ed25519 support only.
+- If RFC 008 capability metadata is available, `receiptAlgs` MUST include `-8`; additional algorithms MAY be negotiated by intersection.
+
 ---
 
 ## 5. Relay Semantics
@@ -332,10 +343,16 @@ For each target recipient, relay selection MUST be deterministic:
 - Federation handoff MUST use RFC 002 `POST /amp/v1/relay/forward` endpoint semantics.
 - If still tied, apply lexical order of endpoint URI as stable tie-break.
 
+When RFC 008 `relayCapabilities` metadata is missing or partial, implementations MUST apply deterministic fallback:
+- If `transferModes` is absent, treat supported modes as `["single"]`.
+- If `maxHopLimit` is absent, do not apply additional candidate filtering beyond runtime `hop_limit` checks in Section 5.6.2.
+- If `receiptAlgs` is absent, assume `[-8]` only.
+
 #### 5.6.2 Loop Prevention
 
 - Each relay handoff MUST carry `relay_path` and `hop_limit`.
-- If `hop_limit` is absent at federation ingress, default value MUST be `8`.
+- If `hop_limit` is absent at federation ingress, default value MUST be `8` before wrapper construction.
+- RFC 002 relay-forward wrapper still requires explicit `hop_limit`; senders MUST emit the concrete computed value.
 - Relay MUST reject forwarding when:
   - local relay ID already exists in `relay_path`; or
   - `hop_limit == 0` before next handoff.
@@ -463,6 +480,7 @@ Suggested mapping (aligned with RFC 001):
 | Invalid/unauthenticated transfer receipt | 3001 | Federation receipt verification failed |
 | Invalid/unauthenticated commit receipt | 3001 | Dual-custody commit report verification failed |
 | Unsupported transfer receipt algorithm | 3001 | COSE `alg` not supported by policy/profile |
+| Unsupported commit receipt algorithm | 3001 | COSE `alg` not supported by policy/profile |
 | Internal relay failure | 5001 | Unexpected server error |
 
 Retry guidance:
@@ -650,6 +668,15 @@ Input:
 Expected:
 - upstream emits two handoff operations, one for `recipient_did=A`, one for `recipient_did=B`
 - per-recipient transfer/commit states evolve independently
+
+### A.14 Unsupported Commit Receipt Algorithm
+
+Input:
+- commit receipt is structurally valid and signed, but COSE protected header `alg` is unsupported by receiver profile
+
+Expected:
+- commit receipt rejected with `3001`
+- transfer state MUST NOT transition to `commit_reported`
 
 ---
 

@@ -4,7 +4,7 @@
 **Authors**: Ryan Cooper, Nowa
 **Created**: 2026-02-04
 **Updated**: 2026-02-07
-**Version**: 0.6
+**Version**: 0.7
 
 ---
 
@@ -16,6 +16,7 @@
 **Related:**
 - RFC 002: Transport Bindings (carrier only)
 - RFC 003: Relay and Store-and-Forward (delivery/persistence)
+- RFC 005: Delegation Credentials & Authorization
 - RFC 006: Session Protocol (state + recovery)
 - RFC 008: Agent Discovery and Directory
 
@@ -110,6 +111,7 @@ An implementation is conformant only if it:
 - MUST parse and validate `CAP_DECLARE`, `CAP_INVOKE`, `CAP_RESULT`.
 - MUST support exact-version invocation by `id`.
 - MUST apply `4002/4003/4004` mapping from Section 9.
+- MUST apply `3004` mapping for invalid delegated invocation evidence when `body.delegation` is present.
 
 `Capability Provider Profile`:
 - MUST publish at least one schema descriptor per supported capability.
@@ -137,6 +139,7 @@ With RFC 001:
 - RFC 001 defines message type codes (`0x20`-`0x23`) and base envelope fields.
 - RFC 004 defines capability body schemas, compatibility semantics, and capability-specific validation rules.
 - Capability validation failures MUST map to RFC 001 client errors `4002`, `4003`, `4004`.
+- Delegation evidence failures for capability invocation map to RFC 001 security error `3004` per RFC 005.
 
 With RFC 002:
 - Capability messages are opaque AMP payload bytes to transport bindings.
@@ -145,6 +148,11 @@ With RFC 002:
 With RFC 003:
 - Relays MUST treat capability bodies as opaque payload and MUST NOT rewrite capability descriptors or invocation params.
 - Store-and-forward redelivery MUST preserve invocation body bytes unchanged.
+
+With RFC 005:
+- Delegated capability invocation MUST carry delegation evidence in signed `CAP_INVOKE.body.delegation`.
+- Delegation verification and chain/revocation semantics are defined in RFC 005.
+- Capability compatibility success MUST NOT bypass delegation authorization checks.
 
 With RFC 006:
 - Session protocol MAY pin negotiated capability IDs for session scope.
@@ -407,6 +415,8 @@ For `CAP_QUERY` responses spanning multiple pages:
 - `id` (recommended), or
 - (`capability` or `type`) + (`version` or `negotiate`).
 
+`CAP_INVOKE` MAY include `delegation` evidence for delegated execution.
+
 `CAP_RESULT` is terminal for accepted invocation and MUST include:
 - `status = "success"` with `result`, or
 - `status = "error"` with structured `error`.
@@ -417,18 +427,21 @@ For `CAP_QUERY` responses spanning multiple pages:
 For each incoming `CAP_INVOKE`, provider MUST validate in this order:
 1. Body shape and required fields.
 2. Coarse authorization/policy checks that do not require capability resolution.
-3. Capability identity resolution.
-4. Capability-scoped authorization/policy checks (if policy depends on resolved capability/version).
-5. Version compatibility.
-6. Input schema validation.
+3. If `body.delegation` is present, delegation evidence validation per RFC 005.
+4. Capability identity resolution.
+5. Capability-scoped authorization/policy checks (if policy depends on resolved capability/version).
+6. Version compatibility.
+7. Input schema validation.
 
 Authorization sequencing notes:
 - Step 2 SHOULD enforce generic caller policy (identity, tenancy, baseline allow/deny).
-- Step 4 MUST enforce capability-level ACL/policy when such policy exists.
+- Step 3 MUST use signed body evidence only; delegation hints in `ext` MUST NOT be used for authorization.
+- Step 5 MUST enforce capability-level ACL/policy when such policy exists.
 - If implementation chooses to resolve capability before full auth due to local architecture, denial responses MUST still follow `3001` leakage-minimization rules in this section.
 
 Error mapping:
 - Unauthorized caller or policy-denied invocation -> `3001 UNAUTHORIZED`
+- Invalid or unsupported delegation evidence for delegated execution -> `3004 DELEGATION_INVALID`
 - Capability unknown -> `4002 CAPABILITY_NOT_FOUND`
 - Version unsupported -> `4003 VERSION_MISMATCH`
 - Params violate input schema -> `4004 SCHEMA_VIOLATION`
@@ -438,6 +451,7 @@ Behavior rule:
 - If invocation is rejected before execution starts, provider SHOULD return AMP `ERROR` with codes above.
 - If invocation is accepted and fails during execution, provider MUST return `CAP_RESULT(status="error")`.
 - To reduce capability enumeration leakage, unauthorized/policy-denied invocations SHOULD return `3001` without revealing capability/version existence.
+- Delegation-specific denial SHOULD return `3004` with minimal detail.
 
 ### 7.3 Invocation State Machine
 
@@ -468,9 +482,12 @@ EXECUTING
 ### 7.4 Invocation CDDL
 
 ```cddl
+delegation-evidence = any ; RFC 005 delegation-evidence object
+
 cap-invoke-by-id = {
   "id": capability-id,
   "params": any,
+  ? "delegation": delegation-evidence,
   ? "timeout_ms": uint
 }
 
@@ -484,6 +501,7 @@ cap-invoke-by-name = {
     { "negotiate": cap-negotiate-hints }
   ),
   "params": any,
+  ? "delegation": delegation-evidence,
   ? "timeout_ms": uint
 }
 
@@ -511,6 +529,7 @@ cap-result-body = (
 Schema notes:
 - `cap-invoke-body` is structurally constrained to `by-id` or `by-name` forms above.
 - If `id` is present, `negotiate` MUST NOT be present; otherwise reject with `4001`.
+- If `delegation` is present, it MUST be validated per RFC 005 using signed body content only.
 - Legacy `type` MAY be accepted for backward compatibility; providers SHOULD emit canonical `capability` in responses/logs.
 
 ---
@@ -538,6 +557,7 @@ This RFC reuses RFC 001 error codes.
 | CBOR decode / structural envelope failure | `1001` | No |
 | Capability body semantic field failure | `4001` | No |
 | Unauthorized or policy-denied capability invocation | `3001` | No |
+| Invalid/unsupported delegation evidence in `CAP_INVOKE.body.delegation` | `3004` | No |
 | Capability not found (including `CAP_QUERY` name/alias no-match) | `4002` | No |
 | Version mismatch (including `CAP_QUERY` range no-match) | `4003` | No |
 | Schema validation failure | `4004` | No |
@@ -550,6 +570,7 @@ This RFC reuses RFC 001 error codes.
 Retry guidance:
 - `400x` errors SHOULD NOT be retried without request mutation.
 - `3001` errors SHOULD NOT be retried without credential/policy change.
+- `3004` errors SHOULD NOT be retried without delegation evidence/policy change.
 - `500x` errors MAY be retried with bounded exponential backoff.
 - Repeated `CAP_INVOKE` retries SHOULD preserve the same AMP `msg_id` or explicit idempotency key to avoid duplicate execution.
 
@@ -773,6 +794,23 @@ Input:
 Expected:
 - `4002 CAPABILITY_NOT_FOUND`
 - Provider does not return empty `CAP_DECLARE`
+
+### A.18 CAP_INVOKE Delegation Positive
+
+Input:
+- `CAP_INVOKE` includes valid `body.delegation` evidence.
+- Delegation evidence passes RFC 005 chain/signature/revocation checks.
+
+Expected:
+- Invocation continues into capability/version/schema validation pipeline.
+
+### A.19 CAP_INVOKE Delegation Invalid Negative
+
+Input:
+- `CAP_INVOKE` includes `body.delegation` with invalid chain or revoked credential.
+
+Expected:
+- `3004 DELEGATION_INVALID`
 
 ---
 

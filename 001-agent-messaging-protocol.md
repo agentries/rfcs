@@ -4,7 +4,7 @@
 **Authors**: Ryan Cooper, Jason Apple Huang  
 **Created**: 2026-02-04  
 **Updated**: 2026-02-07  
-**Version**: 0.35
+**Version**: 0.39
 
 ---
 
@@ -100,6 +100,10 @@ Conformance profiles:
 - `AMP Core`: Envelope/security/handshake/error/ack behavior defined in this RFC.
 - `AMP Full`: AMP Core plus document/credential/delegation application flows in this RFC and companion RFCs.
 
+`AMP Full` delegated-execution baseline:
+- Implementations claiming delegated execution MUST support the delegation carriage model in Section 4.6 for `CAP_INVOKE`.
+- Delegation evidence validation MUST follow RFC 005 and MUST occur before authorization-sensitive business execution.
+
 ### 1.5.1 Profile Matrix
 
 | Section | AMP Core | AMP Full | Notes |
@@ -107,6 +111,7 @@ Conformance profiles:
 | §1 Problem Statement / §2 Requirements | Informative | Informative | Scope and goals |
 | §3 Protocol Layers | MUST | MUST | Processing model |
 | §4 Message Format (CBOR) | MUST | MUST | Envelope, type codes, core schemas |
+| §4.6 Delegated Execution Overlay | Optional | MUST | `body.delegation` carriage and applicability |
 | §5 Capability Invocation | Optional | MUST | Normative details in RFC 004 |
 | §6 Document Exchange | Optional | MUST | Inline + streaming semantics |
 | §7 Credential Exchange | Optional | MUST | VC exchange semantics |
@@ -229,10 +234,10 @@ Message type categories:
 |----------|-------|---------|
 | **Control** | PING, PONG, ACK, ERROR | Protocol control |
 | **Message** | MESSAGE, REQUEST, RESPONSE | General messaging/RPC |
-| **Capability** | CAP_QUERY, CAP_DECLARE | Capability negotiation |
+| **Capability** | CAP_QUERY, CAP_DECLARE, CAP_INVOKE, CAP_RESULT | Capability negotiation and invocation |
 | **Document** | DOC_SEND, DOC_REQUEST | Document exchange |
-| **Credential** | CRED_ISSUE, CRED_REQUEST, CRED_VERIFY | Credential exchange |
-| **Delegation** | DELEG_GRANT, DELEG_REVOKE | Delegation management |
+| **Credential** | CRED_ISSUE, CRED_REQUEST, CRED_PRESENT, CRED_VERIFY | Credential exchange |
+| **Delegation** | DELEG_GRANT, DELEG_REVOKE, DELEG_QUERY | Delegation management |
 
 ### 3.4 Message Lifecycle
 
@@ -551,11 +556,13 @@ deleg-grant-body = {
 }
 
 deleg-revoke-body = {
-  "delegation_id": tstr
+  "delegation_id": tstr,
+  "revocation": bstr
 }
 
 deleg-query-body = {
-  "delegation_id": tstr
+  "delegation_id": tstr,
+  ? "delegator": did
 }
 
 ; Handshake bodies
@@ -600,6 +607,23 @@ batch-body = {
 - If an inner item is malformed and cannot be decoded, recipients MAY return ERROR referencing the batch container with `batch_index`.
 
 **Streaming Clarification**: Large documents use the generic streaming mechanism (STREAM_START/DATA/END) with document metadata in the body. DOC_SEND is for small inline documents only.
+
+### 4.6 Delegated Execution Overlay (AMP Full)
+
+This subsection defines how delegated authorization evidence is carried for application messages.
+
+Delegation-capable message types in this revision:
+- `CAP_INVOKE`
+
+Non-delegation-capable message types:
+- All message types except `CAP_INVOKE` (including `MESSAGE/REQUEST/RESPONSE`, `DOC_*`, `CRED_*`, control/handshake/system types, `BATCH`, and `STREAM_*`).
+
+Carriage and validation rules (MUST):
+- For delegated capability invocation, delegation evidence MUST be carried in signed `CAP_INVOKE.body.delegation` (schema and validation semantics are defined in RFC 005).
+- Delegation hints in `ext` MUST NOT be used for authorization decisions.
+- `CAP_INVOKE` without `body.delegation` is a non-delegated invocation path.
+- If delegation evidence appears outside signed `CAP_INVOKE.body.delegation` (for example in `ext`), receiver MUST reject with `3004 DELEGATION_INVALID`.
+- If `body.delegation` appears on a non-delegation-capable message type, receiver MUST reject with `4001 BAD_REQUEST`.
 
 ---
 
@@ -774,23 +798,21 @@ Compatible with W3C Verifiable Credentials:
 Delegation messages carry authorization artifacts and revocation signals across agents.
 
 Message types:
-- `DELEG_GRANT` (0x50): send delegation credential and optional scope/expiry.
-- `DELEG_REVOKE` (0x51): revoke an existing delegation by ID.
+- `DELEG_GRANT` (0x50): send delegation credential.
+- `DELEG_REVOKE` (0x51): revoke an existing delegation by ID and signed revocation artifact.
 - `DELEG_QUERY` (0x52): query current status of a delegation.
 
-Validation rules (MUST):
-- `DELEG_GRANT.body.credential` MUST be present and parseable by the recipient policy engine.
-- If `expires` is present, recipients MUST reject expired grants with `3004 DELEGATION_INVALID`.
+Normative delegation semantics are defined in **RFC 005**.
+
+Boundary rules (MUST):
+- `DELEG_GRANT.body.credential` MUST be present.
 - `DELEG_REVOKE` and `DELEG_QUERY` MUST include non-empty `delegation_id`.
+- `DELEG_QUERY.body.delegator` SHOULD be included when known to disambiguate issuer-scoped IDs.
+- `DELEG_REVOKE.body.revocation` MUST be present; top-level `delegation_id` MUST match the signed revocation payload ID (RFC 005).
 - Delegation decisions MUST be based on signed body content only (never `ext`).
 
-Processing behavior:
-- On valid `DELEG_GRANT`, recipient records grant and returns `PROC_OK` (or `PROC_FAIL` with details).
-- On valid `DELEG_REVOKE`, recipient marks grant revoked and MUST reject future use.
-- `DELEG_QUERY` returns current status via `RESPONSE` or `PROC_FAIL` for unknown/invalid IDs.
-
-Error mapping:
-- Invalid/expired delegation artifact: `3004 DELEGATION_INVALID`.
+Error mapping for delegation remains:
+- Invalid/expired/revoked delegation artifact: `3004 DELEGATION_INVALID`.
 - Missing required fields: `1001 INVALID_MESSAGE`.
 - Unauthorized sender for delegation action: `3001 UNAUTHORIZED`.
 
@@ -1312,7 +1334,7 @@ See: `008-agent-discovery-directory.md`
 | 3001 | UNAUTHORIZED | Sender not authorized, or decryption failed (key mismatch, message not intended for recipient). **Privacy note**: Recipients SHOULD return 3001 for decryption failures rather than a distinct error to avoid leaking whether the recipient exists or can decrypt (oracle attack prevention). | No |
 | 3002 | CONTACT_REQUIRED | Must request contact first (DISCOVERABLE) | No |
 | 3003 | CONTACT_DENIED | Contact request was denied | No |
-| 3004 | DELEGATION_INVALID | Delegation credential invalid or expired | No |
+| 3004 | DELEGATION_INVALID | Delegation credential invalid, expired, revoked, or chain-invalid | No |
 | 3005 | RATE_LIMITED | Too many requests | Yes (with backoff) |
 
 **Client Errors (4xxx)**:
@@ -1793,7 +1815,7 @@ a9617601626964500000018d746b4e70000000000000000962746f781d6469643a7765623a657861
 | Streaming/documents | A.5 | RFC 001 |
 | Encryption | A.6 + N3 | RFC 001 |
 | Credentials | A.8 | RFC 001 |
-| Delegation | A.9 | RFC 001 |
+| Delegation | A.9 + RFC004 A.18/A.19 + RFC005 vectors | RFC 001/004/005 |
 | Capability semantics | RFC004 capability vectors | RFC 004 |
 | Provisional responses | RFC006 session vectors | RFC 006 |
 | Discovery/presence/contact | RFC008 discovery vectors | RFC 008 |
@@ -1856,3 +1878,7 @@ Versioning note: public version numbers were reset on 2026-02-06 for external pu
 | 2026-02-06 | 0.33 | 5.22 | Nowa | Added delegation exchange semantics, strengthened encryption byte-level rules, added boundary contracts for external sections, and expanded vectors for credential/delegation coverage |
 | 2026-02-07 | 0.34 | 5.23 | Nowa | Raised capability error mapping to MUST for AMP Full boundary contract; clarified registry process scope wording; replaced resolved open questions with cross-RFC tracking notes |
 | 2026-02-07 | 0.35 | 5.24 | Nowa | Clarified version negotiation transport exception for RFC 002 HTTP mode while preserving `v` rejection requirements |
+| 2026-02-07 | 0.36 | 5.25 | Nowa | Aligned delegation baseline with RFC 005 authority: DELEG_REVOKE now includes signed revocation artifact and section 7.1 serves as boundary summary |
+| 2026-02-07 | 0.37 | 5.26 | Nowa | Added AMP Full delegated-execution overlay: delegation-capable type set, stream/batch carriage rules, and deterministic error mapping for unsupported delegation carriage |
+| 2026-02-07 | 0.38 | 5.27 | Nowa | Narrowed delegation interop baseline to CAP_INVOKE-only, removed stream/batch delegated carriage rules, and aligned 3004 description with RFC 005 semantics |
+| 2026-02-07 | 0.39 | 5.28 | Nowa | Clarified CAP_INVOKE delegation trigger semantics, added ext-only delegation rejection wording, added optional DELEG_QUERY delegator selector, and aligned Full coverage matrix with RFC004/005 delegation vectors |

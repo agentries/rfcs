@@ -4,7 +4,7 @@
 **Authors**: Ryan Cooper, Nowa
 **Created**: 2026-02-05
 **Updated**: 2026-02-07
-**Version**: 0.11
+**Version**: 0.13
 
 ---
 
@@ -503,12 +503,18 @@ Default rule (`strict` mode, MUST be default):
 Optional delegated rule (`act_as` mode):
 - Principal MAY send with a different `from` DID only if auth material explicitly authorizes that DID (for example, token `act_as` claim).
 - `act_as` mode MUST be explicitly enabled by policy and MUST be auditable.
+- `act_as` mode is transport identity policy only; it MUST NOT be treated as delegation authorization proof.
+
+Delegated execution binding rule (RFC 005, MUST):
+- If a `CAP_INVOKE` message carries signed `body.delegation`, receiver MUST enforce strict principal binding (`transport principal DID == AMP from DID`) for `/amp/v1/messages`.
+- In this case, authorization to act for another DID MUST come from RFC 005 delegation evidence, not from transport `act_as`.
 
 ### 7.2 Enforcement Requirements
 
 Relays MUST:
 - Support configurable strict/delegated mode, with strict as default.
 - Reject unauthorized principal/from combinations.
+- Enforce strict principal binding for `CAP_INVOKE` messages carrying `body.delegation` even when `act_as` mode is enabled globally.
 - Apply quotas and rate limits at least by `transport principal`, and SHOULD additionally track `from` DID.
 - Emit auditable tuple: `(principal_id, from_did, message_id)`.
 
@@ -725,6 +731,19 @@ Given:
 Expected:
 - reject with auth failure mapping (`3001` hint)
 - no custody state update
+
+### A.12 Delegation with act_as Principal Mismatch Negative
+
+Given:
+- endpoint `/amp/v1/messages`
+- message `typ=CAP_INVOKE` carries signed `body.delegation`
+- `act_as` mode enabled
+- `transport principal DID != AMP from DID`
+
+Expected:
+- reject with auth failure mapping (`3001` hint)
+- receiver MUST NOT treat transport `act_as` as delegation proof
+- no next-hop forward or queue insertion
 
 ---
 
