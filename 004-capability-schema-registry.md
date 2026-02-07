@@ -4,7 +4,7 @@
 **Authors**: Ryan Cooper, Nowa
 **Created**: 2026-02-04
 **Updated**: 2026-02-07
-**Version**: 0.7
+**Version**: 0.12
 
 ---
 
@@ -157,6 +157,8 @@ With RFC 005:
 With RFC 006:
 - Session protocol MAY pin negotiated capability IDs for session scope.
 - RFC 006 session recovery MUST NOT change negotiated capability version unless renegotiation occurs.
+- `CAP_INVOKE`/`CAP_RESULT` MAY carry signed `body.session` context extension for session-scoped flows.
+- When `body.session` is present, syntax compatibility is defined here and validation semantics are defined by RFC 006.
 
 With RFC 008:
 - Discovery indexes MAY cache capability summaries, but canonical compatibility decisions use RFC 004 descriptors/negotiation payloads.
@@ -234,6 +236,7 @@ capability-descriptor = {
   "version": semver,
   "input_schema": schema-ref,
   "output_schema": schema-ref,
+  ? "descriptor_sig": bstr,
   ? "supported_ranges": [* semver-range],
   ? "deprecated_ranges": [* semver-range],
   ? "notes": tstr
@@ -250,6 +253,10 @@ Consistency rules:
   - `uri`, or
   - both `bundle_id` and `artifact_key`.
 - In `Offline Registry Profile`, `bundle_id` and `artifact_key` are REQUIRED and `uri` is OPTIONAL.
+- `media_type` defaults to `application/schema+json` when omitted.
+- Implementations MUST support `application/schema+json` as MTI schema media type.
+- Additional schema media types MAY be supported by local profile policy, but are not MTI in this revision.
+- If `descriptor_sig` is present, it MUST be verifiable against namespace owner DID policy.
 
 ### 4.3 Namespace Governance
 
@@ -297,6 +304,15 @@ GET /cap-registry/{capability-name}/{version}/output.schema.json
 - Consumers SHOULD cache by `id + hash` key.
 - Consumers SHOULD treat descriptor as immutable when `hash` unchanged.
 - If freshness metadata exists, consumers SHOULD refresh on expiry.
+
+Trust profiles:
+- `Private Registry Trust Profile` (default): descriptor signature MAY be omitted when descriptor source authenticity is guaranteed by deployment policy.
+- `Public Registry Trust Profile` (cross-organization interoperability): descriptor signature MUST be present and verifiable.
+
+Signature requirements (Public Registry Trust Profile):
+- `capability-descriptor.descriptor_sig` MUST be a COSE_Sign1 over deterministic CBOR bytes of the descriptor object with `descriptor_sig` omitted.
+- Signer key MUST resolve under namespace owner DID `assertionMethod`.
+- Missing or invalid descriptor signature in this profile MUST fail with `3001`.
 
 ### 5.3 Offline Registry Profile
 
@@ -359,6 +375,8 @@ Additional rules:
 - If requester sends `id` plus (`capability`, `version`) and values disagree, reject `4001`.
 - Negotiation results MAY be cached per peer for short duration, but sender MUST tolerate stale cache mismatch and retry with fresh query.
 - Range parsing MUST follow Section 4.4 grammar subset.
+- Per-invocation negotiation cache hint fields (for example `max_age_s` in invocation body) are not standardized in this revision.
+- Cache behavior MUST be driven by descriptor freshness/integrity metadata and local policy.
 
 ### 6.4 Discovery and Negotiation CDDL
 
@@ -472,7 +490,7 @@ Executor:
 RECEIVED
   -> VALIDATING
 VALIDATING
-  -> REJECTED(ERROR 3xxx/4xxx)
+  -> REJECTED(ERROR 1xxx/3xxx/4xxx/5xxx)
   -> EXECUTING
 EXECUTING
   -> (optional) PROCESSING/PROGRESS
@@ -483,11 +501,16 @@ EXECUTING
 
 ```cddl
 delegation-evidence = any ; RFC 005 delegation-evidence object
+cap-session-context = {
+  "session_id": bstr .size 16,
+  ? "session_scope": true
+}
 
 cap-invoke-by-id = {
   "id": capability-id,
   "params": any,
   ? "delegation": delegation-evidence,
+  ? "session": cap-session-context,
   ? "timeout_ms": uint
 }
 
@@ -502,6 +525,7 @@ cap-invoke-by-name = {
   ),
   "params": any,
   ? "delegation": delegation-evidence,
+  ? "session": cap-session-context,
   ? "timeout_ms": uint
 }
 
@@ -517,11 +541,13 @@ cap-result-error = {
 cap-result-body = (
   {
     "status": "success",
-    "result": any
+    "result": any,
+    ? "session": cap-session-context
   } /
   {
     "status": "error",
-    "error": cap-result-error
+    "error": cap-result-error,
+    ? "session": cap-session-context
   }
 )
 ```
@@ -530,6 +556,8 @@ Schema notes:
 - `cap-invoke-body` is structurally constrained to `by-id` or `by-name` forms above.
 - If `id` is present, `negotiate` MUST NOT be present; otherwise reject with `4001`.
 - If `delegation` is present, it MUST be validated per RFC 005 using signed body content only.
+- `session` is an optional extension field for RFC 006 session-scoped capability flows.
+- Presence of `session` MUST NOT alter capability negotiation or schema-validation behavior defined by RFC 004.
 - Legacy `type` MAY be accepted for backward compatibility; providers SHOULD emit canonical `capability` in responses/logs.
 
 ---
@@ -552,10 +580,18 @@ Rules:
 
 This RFC reuses RFC 001 error codes.
 
+Deterministic precedence:
+- Parse/shape/type errors in capability message bodies (including malformed optional `body.session` extension object) MUST map to `1001`.
+- Authorization/policy denials MUST map to `3001`.
+- After parse/auth checks, capability semantic mismatches MUST map to `4001`/`4002`/`4003`/`4004`.
+- Availability/runtime failures MUST map to `500x`.
+
 | Failure | Code | Retry |
 |---------|------|-------|
 | CBOR decode / structural envelope failure | `1001` | No |
-| Capability body semantic field failure | `4001` | No |
+| Malformed `body.session` context extension (type/shape/size) | `1001` | No |
+| Descriptor signature required by trust profile but missing/invalid | `3001` | No |
+| Capability body semantic field failure (well-formed body) | `4001` | No |
 | Unauthorized or policy-denied capability invocation | `3001` | No |
 | Invalid/unsupported delegation evidence in `CAP_INVOKE.body.delegation` | `3004` | No |
 | Capability not found (including `CAP_QUERY` name/alias no-match) | `4002` | No |
@@ -573,6 +609,9 @@ Retry guidance:
 - `3004` errors SHOULD NOT be retried without delegation evidence/policy change.
 - `500x` errors MAY be retried with bounded exponential backoff.
 - Repeated `CAP_INVOKE` retries SHOULD preserve the same AMP `msg_id` or explicit idempotency key to avoid duplicate execution.
+
+Session interaction note:
+- When RFC 006 session semantics are active, missing required session context semantics (for example independent-mode required `session_id`) follow RFC 006 mapping (`4001`), while session context shape/type errors still follow `1001` in this section.
 
 Correlation handling:
 - On response `reply_to` mismatch, receiver MUST mark response invalid and MUST NOT apply it to invocation state.
@@ -812,10 +851,46 @@ Input:
 Expected:
 - `3004 DELEGATION_INVALID`
 
+### A.20 CAP_INVOKE Session Context Extension Positive
+
+Input:
+- `CAP_INVOKE` valid by-id or by-name form and includes `body.session.session_id` (16-byte bstr), optionally with `session_scope=true`.
+
+Expected:
+- Message remains valid under RFC 004 schema.
+- Capability negotiation/validation result is unchanged except for RFC 006 session semantics.
+
+### A.21 CAP_RESULT Session Context Extension Positive
+
+Input:
+- `CAP_RESULT` success or error form includes optional `body.session.session_id` (16-byte bstr), optionally with `session_scope=true`.
+
+Expected:
+- Message remains valid under RFC 004 schema.
+- Capability result correlation behavior remains driven by envelope `reply_to`.
+
+### A.22 Public Registry Descriptor Signature Required Negative
+
+Input:
+- Deployment uses `Public Registry Trust Profile`.
+- Retrieved descriptor is hash-valid but `descriptor_sig` missing or signature verification fails.
+
+Expected:
+- Descriptor rejected with `3001 UNAUTHORIZED`.
+- Capability resolution/negotiation MUST NOT continue using this descriptor.
+
+### A.23 Byte-Level Error Code Checks
+
+Input:
+- Version negotiation mismatch case mapped to `4003`.
+- Delegated invocation evidence invalid case mapped to `3004`.
+
+Expected:
+- `4003` CBOR uint encoding bytes: `19 0f a3`.
+- `3004` CBOR uint encoding bytes: `19 0b bc`.
+
 ---
 
 ## Appendix B. Open Questions
 
-- Should RFC 004 require a single canonical schema language (JSON Schema only) or allow multiple schema types with explicit `media_type` negotiation?
-- Should capability descriptor signatures be mandatory in RFC 004 or deferred to a later trust-profile RFC?
-- Should negotiation cache hints (`max_age_s`) be standardized in message body to reduce repeated queries?
+No open questions in this revision.

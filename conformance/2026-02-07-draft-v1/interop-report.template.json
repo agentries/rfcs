@@ -1,0 +1,23 @@
+{
+  "suite_version": "2026-02-07-draft-v1",
+  "implementation": {
+    "id": "amp-rust-reference",
+    "version": "0.1.0",
+    "repository": "https://example.invalid/amp-rust-reference",
+    "commit": "deadbeef"
+  },
+  "run": {
+    "executed_at": "2026-02-07T12:00:00Z",
+    "environment": {
+      "os": "macos-15",
+      "arch": "arm64",
+      "runtime": "rust-1.85.0",
+      "notes": "offline mode; local DID resolver fixtures"
+    }
+  },
+  "results": [
+    { "vector_id": "001:A.1", "status": "pass" },
+    { "vector_id": "003:A.15", "status": "pass" },
+    { "vector_id": "007:A.17a", "status": "pass" }
+  ]
+}

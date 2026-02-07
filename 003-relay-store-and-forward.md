@@ -4,7 +4,7 @@
 **Authors**: Nowa
 **Created**: 2026-02-06
 **Updated**: 2026-02-07
-**Version**: 0.6
+**Version**: 0.61
 
 ---
 
@@ -677,6 +677,16 @@ Input:
 Expected:
 - commit receipt rejected with `3001`
 - transfer state MUST NOT transition to `commit_reported`
+
+### A.15 Byte-Level Error Code Checks
+
+Input:
+- Any federation loop/hop-limit rejection case mapped to `2003`.
+- Any receipt auth verification failure mapped to `3001`.
+
+Expected:
+- `2003` CBOR uint encoding bytes: `19 07 d3`.
+- `3001` CBOR uint encoding bytes: `19 0b b9`.
 
 ---
 

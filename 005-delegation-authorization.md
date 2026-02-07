@@ -4,7 +4,7 @@
 **Authors**: Ryan Cooper, Nowa
 **Created**: 2026-02-04
 **Updated**: 2026-02-07
-**Version**: 0.33
+**Version**: 0.34
 
 ---
 
@@ -711,6 +711,16 @@ Input:
 Expected:
 - Responder rejects with `4001 BAD_REQUEST` (ambiguous key) or policy-equivalent non-leaking denial.
 
+### A.20 Byte-Level Error Code Checks
+
+Input:
+- Unsupported/invalid delegation evidence case mapped to `3004`.
+- Ambiguous query/malformed request case mapped to `4001`.
+
+Expected:
+- `3004` CBOR uint encoding bytes: `19 0b bc`.
+- `4001` CBOR uint encoding bytes: `19 0f a1`.
+
 ---
 
 ## Appendix B. Open Questions
@@ -730,3 +740,4 @@ No open questions in this revision.
 | 2026-02-07 | 0.31 | Nowa | Aligned with RFC 001 cross-message delegation overlay: removed schema-local capability restriction wording, added non-capable-type rejection rule, and updated validation/error/test coverage |
 | 2026-02-07 | 0.32 | Nowa | Narrowed delegated-execution interop baseline to CAP_INVOKE-only and aligned carriage/validation wording with RFC 001 Section 4.6 |
 | 2026-02-07 | 0.33 | Nowa | Unified selector-syntax failure mapping to 3004, defined canonical identity key as (delegator, delegation_id), clarified CAP_INVOKE delegation trigger semantics, and added ambiguity/keying conformance coverage |
+| 2026-02-07 | 0.34 | Nowa | Added minimal byte-level error-code checks for delegation interop vectors (`3004`/`4001`) |

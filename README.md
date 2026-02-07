@@ -6,9 +6,9 @@ Request for Comments (RFCs) for extending the Agentries protocol.
 
 | Type | Description | Location |
 |------|-------------|----------|
-| **RFC (Standard)** | Normative specifications, ready for implementation | `specs/rfcs/` |
-| **Research** | Design rationale, surveys, analysis (informative only) | `specs/research/` |
-| **Decision Log** | Record of architectural decisions | `specs/rfcs/DECISION-LOG.md` |
+| **RFC (Standard)** | Normative specifications, ready for implementation | Repository root (`./`) |
+| **Research** | Design rationale and analysis (informative only) | Repository root (`./`) |
+| **Decision Log** | Record of architectural decisions | `DECISION-LOG.md` |
 
 ## RFC Process
 
@@ -25,13 +25,13 @@ Note: **Accepted** indicates implementation-ready specifications (byte-accurate 
 
 | RFC | Title | Status | Author | Last Updated |
 |-----|-------|--------|--------|--------------|
-| 001 | [Agent Messaging Protocol (AMP Core)](001-agent-messaging-protocol.md) | **Draft v0.33 (Full Entry, Core Profile defined)** | Ryan Cooper, Jason Huang | 2026-02-06 |
-| 002 | [Transport Bindings (TCP-first, HTTP/WS mappings)](002-transport-bindings.md) | Draft v0.9 (federation forward/commit wrappers + auth binding) | Ryan Cooper, Nowa | 2026-02-06 |
-| 003 | [Relay & Store-and-Forward](003-relay-store-and-forward.md) | Draft v0.4 (dual-custody closure + federation MTI) | Nowa | 2026-02-06 |
-| 004 | [Capability Schema Registry & Compatibility](004-capability-schema-registry.md) | Draft (Early) | - | 2026-02-06 |
-| 005 | [Delegation Credentials & Authorization](005-delegation-authorization.md) | Proposal (Outline) | - | 2026-02-06 |
-| 006 | [Session Protocol (State + Recovery)](006-session-protocol.md) | Proposal (Outline) | - | 2026-02-06 |
-| 007 | [Agent Payment Protocol](007-agent-payment-protocol.md) | Proposal (Outline) | - | 2026-02-05 |
+| 001 | [Agent Messaging Protocol (AMP Core)](001-agent-messaging-protocol.md) | Draft v0.42 | Ryan Cooper, Jason Apple Huang | 2026-02-07 |
+| 002 | [Transport Bindings (TCP-first, HTTP/WS mappings)](002-transport-bindings.md) | Draft v0.15 | Ryan Cooper, Nowa | 2026-02-07 |
+| 003 | [Relay & Store-and-Forward](003-relay-store-and-forward.md) | Draft v0.61 | Nowa | 2026-02-07 |
+| 004 | [Capability Schema Registry & Compatibility](004-capability-schema-registry.md) | Draft v0.12 | Ryan Cooper, Nowa | 2026-02-07 |
+| 005 | [Delegation Credentials & Authorization](005-delegation-authorization.md) | Draft v0.34 | Ryan Cooper, Nowa | 2026-02-07 |
+| 006 | [Session Protocol (State + Recovery)](006-session-protocol.md) | Draft v0.8 (coupled MTI + optional independent thread profile + explicit session_scope marker) | Ryan Cooper, Nowa | 2026-02-07 |
+| 007 | [Agent Payment Protocol](007-agent-payment-protocol.md) | Draft v0.34 (CAP precedence + session source-of-truth + split descriptor failure vectors + byte checks) | Ryan Cooper, Nowa | 2026-02-07 |
 | 008 | [Agent Discovery & Directory](008-agent-discovery-directory.md) | Proposal (relay federation capability descriptor added) | - | 2026-02-06 |
 | 009 | [Reputation & Trust Signals](009-reputation-trust-signals.md) | Planned (Future) | - | 2026-02-06 |
 | 010 | [Observability & Evaluation Telemetry](010-observability-evaluation-telemetry.md) | Planned (Future) | - | 2026-02-06 |
@@ -43,8 +43,10 @@ Note: **Accepted** indicates implementation-ready specifications (byte-accurate 
 |----------|------|-------------|
 | [DECISION-LOG.md](DECISION-LOG.md) | Decision Log | Architectural decisions with rationale |
 | [AMP-FIRST-PRINCIPLES.md](AMP-FIRST-PRINCIPLES.md) | Research | Design rationale for AMP |
-| [AMP-EVOLUTION-RESEARCH.md](../research/AMP-EVOLUTION-RESEARCH.md) | Research | Historical protocol analysis |
-| [AGENT-PROTOCOLS-LANDSCAPE.md](../research/AGENT-PROTOCOLS-LANDSCAPE.md) | Research | Competitive protocol survey (as of 2026-02-04) |
+| [conformance/2026-02-07-draft-v1/README.md](conformance/2026-02-07-draft-v1/README.md) | Conformance | Draft interoperability suite manifest + report schema/template |
+| [examples/rust-amp001/README.md](examples/rust-amp001/README.md) | Example | RFC 001 end-to-end demo (server/client) |
+| [examples/rust-amp002-004/README.md](examples/rust-amp002-004/README.md) | Example | RFC 002-004 transport and capability interop demo/tests |
+| [examples/rust-amp005/README.md](examples/rust-amp005/README.md) | Example | RFC 003 relay/store-and-forward E2E demo/tests |
 
 ## RFC Proposals (Outlines)
 
@@ -86,18 +88,18 @@ Note: **Accepted** indicates implementation-ready specifications (byte-accurate 
 - State sharing format
 - Persistence and resumption
 
-*Note: Relationship to RFC 001 thread_id to be clarified.*
+*Note: Draft v0.8 keeps `coupled` (`thread_id==session_id`) as MTI baseline, adds optional `independent` thread mode, and requires explicit `session_scope=true` marker for unambiguous session-scoped non-control dispatch.*
 
 ### RFC 007: Agent Payment Protocol
 **Problem**: Agents need to pay each other for services.
 
 **Scope**:
-- Agent wallet integration
-- Payment channels for micropayments
-- Escrow for service delivery
-- Reputation integration
+- Quote/authorize/capture/cancel/refund/status workflow semantics
+- Settlement-proof abstraction and deterministic verification/mapping
+- CAP interoperability profile (`org.agentries.payment.workflow:1.0.0`)
+- Chain/rail-specific settlement internals remain out of scope
 
-*Priority: Lower - can build meaningful systems without payments first.*
+*Note: Draft v0.34 keeps RFC 004-aligned CAP behavior and further splits descriptor-integrity negatives into deterministic `3001`/`5002` vectors with minimal byte-level code checks.*
 
 ### RFC 008: Agent Discovery & Directory
 **Problem**: Agents need a way to find peers and publish capabilities.

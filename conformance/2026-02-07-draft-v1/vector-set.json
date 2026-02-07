@@ -1,0 +1,46 @@
+{
+  "suite_version": "2026-02-07-draft-v1",
+  "status": "draft",
+  "referenced_rfcs": [
+    { "id": "001", "version": "0.42" },
+    { "id": "002", "version": "0.15" },
+    { "id": "003", "version": "0.61" },
+    { "id": "004", "version": "0.12" },
+    { "id": "005", "version": "0.34" },
+    { "id": "006", "version": "0.8" }
+  ],
+  "optional_extension_rfcs": [
+    { "id": "007", "version": "0.34" }
+  ],
+  "required_vectors": [
+    "001:A.1",
+    "001:A.2",
+    "001:A.6",
+    "002:A.1",
+    "002:A.2",
+    "003:A.1",
+    "003:A.5",
+    "003:A.15",
+    "004:A.2",
+    "004:A.15",
+    "004:A.23",
+    "005:A.4",
+    "005:A.14",
+    "005:A.20",
+    "006:A.2",
+    "006:A.15",
+    "006:A.17",
+    "007:A.9",
+    "007:A.17a",
+    "007:A.17b",
+    "007:A.18",
+    "007:A.21"
+  ],
+  "optional_vectors": [
+    "001:full-profile vectors",
+    "002:federation profile vectors",
+    "003:federation profile vectors",
+    "006:independent thread profile vectors",
+    "007:CAP path vectors"
+  ]
+}

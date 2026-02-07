@@ -4,7 +4,7 @@
 **Authors**: Ryan Cooper, Jason Apple Huang  
 **Created**: 2026-02-04  
 **Updated**: 2026-02-07  
-**Version**: 0.39
+**Version**: 0.42
 
 ---
 
@@ -127,6 +127,22 @@ Conformance profiles:
 | §17 Registry Governance | SHOULD | SHOULD | Allocation and registration process |
 | Appendix A Test Vectors | MUST (core vectors) | MUST (full vectors) | Acceptance evidence |
 | Appendix B Implementation Notes | Informative | Informative | Non-normative guidance |
+
+### 1.5.2 Interop Certification Gate
+
+Status transition requirement for `AMP Full`:
+- Advancing to `Accepted/Implementation-Ready` MUST require a public interoperability conformance suite.
+- The gate MUST include at least two independent implementations that pass the required Full-profile vectors.
+- Certification artifacts SHOULD include versioned test reports and reproducible vector references.
+- The conformance suite MUST publish a versioned vector set identifier and referenced RFC versions (`001`-`006`) used for evaluation.
+- The canonical suite artifact set MUST be published in the AMP specification repository under a stable versioned location (for example `conformance/<suite_version>/`).
+- Each candidate implementation MUST publish a machine-readable report (for example `interop-report.json`) including at least:
+  - implementation identifier and version;
+  - conformance suite/vector set version;
+  - per-vector pass/fail results;
+  - environment metadata sufficient for rerun.
+- Acceptance decision MUST be based on required-vector pass results only; optional profile vectors MUST be reported separately.
+- Conformance suite governance MUST be maintained by AMP editors, and suite-breaking changes MUST follow the RFC change-control process.
 
 ### 1.6 Terminology
 
@@ -319,6 +335,18 @@ did = tstr  ; DID string or DID URL (optional key fragment)
 - `enc.nonce` MUST be 24 bytes and unique for each encryption under the same sender/recipient key pair.
 - `body` MUST be encoded using **deterministic CBOR** (RFC 8949 §4.2) for signing; for unencrypted messages, verifiers MUST re-encode body deterministically before verification; for encrypted messages, verifiers use decrypted bytes directly (see §8.2).
 - `ext` is NOT signed — treat as untrusted (see §8.7 for security implications).
+
+#### 4.1.1 Thread Context Semantics
+
+`thread_id` defines conversation context at AMP Core layer and is independent of transport.
+
+- `thread_id` is OPTIONAL and treated as opaque bytes by AMP Core.
+- If present, `thread_id` groups related messages into one logical conversation thread.
+- `reply_to` identifies a specific prior message; `thread_id` identifies conversation context. Implementations MUST NOT treat these fields as interchangeable.
+- When a message is an in-thread follow-up, senders SHOULD reuse the same `thread_id`.
+- When replying (`reply_to` present), senders SHOULD preserve the triggering message's `thread_id` when that message has one.
+- Receivers and relays MUST preserve `thread_id` bytes exactly and MUST include the field in signature verification when present (see §8.1).
+- Session-specific constraints (for example, whether `thread_id` must equal `session_id`) are defined by RFC 006 and apply only when session semantics are in use.
 
 **Note on Examples**: Code examples throughout this document may omit some required fields (e.g., `ttl`, `sig`) for brevity. All required fields listed above MUST be present in actual implementations.
 
@@ -1529,8 +1557,7 @@ Previously listed topics are now tracked in dedicated RFCs:
 - Reputation and trust signals: RFC 009
 - Payment protocol: RFC 007
 
-Remaining open question:
-1. **Interop Certification**: Should AMP Full require a public interoperability test suite gate before status moves to Accepted/Implementation-Ready?
+No open questions in this revision.
 
 ---
 
@@ -1882,3 +1909,6 @@ Versioning note: public version numbers were reset on 2026-02-06 for external pu
 | 2026-02-07 | 0.37 | 5.26 | Nowa | Added AMP Full delegated-execution overlay: delegation-capable type set, stream/batch carriage rules, and deterministic error mapping for unsupported delegation carriage |
 | 2026-02-07 | 0.38 | 5.27 | Nowa | Narrowed delegation interop baseline to CAP_INVOKE-only, removed stream/batch delegated carriage rules, and aligned 3004 description with RFC 005 semantics |
 | 2026-02-07 | 0.39 | 5.28 | Nowa | Clarified CAP_INVOKE delegation trigger semantics, added ext-only delegation rejection wording, added optional DELEG_QUERY delegator selector, and aligned Full coverage matrix with RFC004/005 delegation vectors |
+| 2026-02-07 | 0.40 | 5.29 | Nowa | Resolved interop certification open question by defining an AMP Full Accepted/Implementation-Ready gate with public conformance suite and multi-implementation evidence |
+| 2026-02-07 | 0.41 | 5.30 | Nowa | Expanded interop certification gate into executable requirements: versioned vector set references, required report fields, and acceptance decision basis |
+| 2026-02-07 | 0.42 | 5.31 | Nowa | Added conformance suite publication location and governance requirements for Accepted/Implementation-Ready gate auditability |

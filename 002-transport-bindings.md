@@ -4,7 +4,7 @@
 **Authors**: Ryan Cooper, Nowa
 **Created**: 2026-02-05
 **Updated**: 2026-02-07
-**Version**: 0.13
+**Version**: 0.15
 
 ---
 
@@ -113,6 +113,7 @@ A transport implementation is conformant only if it:
 - MUST support HTTP polling endpoint with the normative wrapper in Section 6.2.
 - SHOULD support WebSocket endpoint.
 - SHOULD support webhook push with the normative wrapper in Section 6.3.
+- WebSocket support remains OPTIONAL for conformance in this revision and MUST NOT be treated as Relay Profile MTI.
 
 `Relay Federation Extension` (when claiming RFC 003 Federation Profile):
 - MUST support HTTP `POST /amp/v1/relay/forward` with wrapper in Section 6.5.
@@ -144,6 +145,7 @@ Transport MUST preserve AMP boundaries:
 - One transport message unit carries exactly one canonical payload (`amp-message` or Section 6.5 `relay-forward` wrapper).
 - Sender MUST NOT coalesce multiple canonical payloads in one transport unit.
 - Receiver MUST reject partial/truncated payloads.
+- Mandatory congestion-control/backpressure signaling algorithm is out of scope for this RFC revision; implementations MAY apply local policy as long as canonical framing semantics are preserved.
 
 All conformant implementations MUST accept at least 1 MiB inbound payload.
 
@@ -454,6 +456,7 @@ Rules:
 - Receiver MUST validate wrapper consistency before queueing/forwarding.
 - If `accepted=true`, `receipt` MUST be present and MUST be cryptographically verifiable.
 - If `accepted=false`, `receipt` MUST NOT be present and `error_code` SHOULD be present.
+- AMPS-native federation frame mapping is out of scope in this revision; federation interoperability baseline is the HTTP wrapper model defined in this section.
 
 ### 6.6 Relay Commit Report Wrapper (Normative)
 
@@ -749,6 +752,4 @@ Expected:
 
 ## Appendix B. Open Questions
 
-1. Should Relay Profile additionally require WebSocket (`MUST`) once interop test coverage matures?
-2. Should AMPS define mandatory congestion-control and backpressure signaling in this RFC or a follow-up?
-3. Should federation wrapper receive an AMPS-native frame mapping in this RFC or a follow-up?
+No open questions in this revision.
