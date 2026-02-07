@@ -3,8 +3,8 @@
 **Status**: Draft  
 **Authors**: Ryan Cooper, Jason Apple Huang  
 **Created**: 2026-02-04  
-**Updated**: 2026-02-06  
-**Version**: 0.33
+**Updated**: 2026-02-07  
+**Version**: 0.35
 
 ---
 
@@ -1156,7 +1156,7 @@ Capability identifiers, versioning, and schema registry details are defined in *
 
 **Boundary Contract (Normative)**:
 - AMP Full implementations MUST validate capability identifiers and version compatibility according to RFC 004.
-- Unknown capability namespace/version combinations SHOULD map to `4002` or `4003`.
+- Unknown capability namespace/version combinations MUST map to `4002` or `4003`.
 
 See: `004-capability-schema-registry.md`
 
@@ -1174,6 +1174,10 @@ See: `004-capability-schema-registry.md`
 - If a non-handshake message is received with an unsupported `v`, the recipient MUST respond with ERROR 1004 (UNSUPPORTED_VERSION).
 
 When establishing communication, agents negotiate the protocol version:
+
+Transport-specific note:
+- For HTTP request/response mode, RFC 002 allows skipping explicit HELLO when both peers are preconfigured with a supported AMP major version.
+- This optimization does not change version safety requirements: receivers MUST still reject unsupported `v` with `1004`.
 
 ```
 Agent A                              Agent B
@@ -1484,19 +1488,27 @@ On no response within timeout:
 ### 17.3 Registration Process
 
 1. Open issue on AMP specification repository
-2. Provide: code/namespace, purpose, semantics
+2. Provide: code (message type / error code / extension field path), purpose, semantics
 3. Review by maintainers
 4. Merge into registry document
+
+Scope note:
+- This process applies to AMP message type codes, error codes, and extension fields.
+- Capability namespaces and capability version governance are defined in RFC 004 and do not require centralized registration in this process.
 
 ---
 
 ## 18. Open Questions
 
-1. **Relay Protocol**: How are relays discovered? How are they authenticated?
-2. **Message Persistence**: How long do relays store messages? (Partially addressed in §8.3)
-3. **Group Messaging**: How to handle multi-agent collaboration?
-4. **Reputation System**: How to bootstrap and maintain agent reputation scores?
-5. **Payment Integration**: How to handle paid capability invocation?
+Previously listed topics are now tracked in dedicated RFCs:
+- Relay discovery/authentication: RFC 002 / RFC 003 / RFC 008
+- Message persistence and store-and-forward policy: RFC 003
+- Group messaging and coordination: RFC 011
+- Reputation and trust signals: RFC 009
+- Payment protocol: RFC 007
+
+Remaining open question:
+1. **Interop Certification**: Should AMP Full require a public interoperability test suite gate before status moves to Accepted/Implementation-Ready?
 
 ---
 
@@ -1842,3 +1854,5 @@ Versioning note: public version numbers were reset on 2026-02-06 for external pu
 | 2026-02-06 | 0.31 | 5.20 | Nowa | Refined Section 3 to a message-centric layer model; added explicit AMP message core responsibilities and lifecycle |
 | 2026-02-06 | 0.32 | 5.21 | Nowa | Positioned 001 as AMP Full entry spec with AMP Core subset; added profile matrix and chapter-level conformance mapping |
 | 2026-02-06 | 0.33 | 5.22 | Nowa | Added delegation exchange semantics, strengthened encryption byte-level rules, added boundary contracts for external sections, and expanded vectors for credential/delegation coverage |
+| 2026-02-07 | 0.34 | 5.23 | Nowa | Raised capability error mapping to MUST for AMP Full boundary contract; clarified registry process scope wording; replaced resolved open questions with cross-RFC tracking notes |
+| 2026-02-07 | 0.35 | 5.24 | Nowa | Clarified version negotiation transport exception for RFC 002 HTTP mode while preserving `v` rejection requirements |

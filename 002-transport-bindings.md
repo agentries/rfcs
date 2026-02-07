@@ -3,8 +3,8 @@
 **Status**: Draft
 **Authors**: Ryan Cooper, Nowa
 **Created**: 2026-02-05
-**Updated**: 2026-02-06
-**Version**: 0.9
+**Updated**: 2026-02-07
+**Version**: 0.11
 
 ---
 
@@ -46,6 +46,8 @@ This RFC defines AMP transport bindings with a TCP-first normative model. AMPS (
 6.5 Relay Federation Forward Wrapper (Normative)
 6.6 Relay Commit Report Wrapper (Normative)
 7. Transport Authentication and DID Binding
+7.1 Principal Binding Rule
+7.2 Enforcement Requirements
 7.3 Relay Federation Binding Rule
 8. Error Handling and Retry
 9. Versioning and Compatibility
@@ -389,6 +391,10 @@ Receiver MUST verify:
 - `X-AMP-Relay` header equals `webhook-delivery.relay`.
 - `webhook-delivery.message` as valid AMP payload.
 
+Ownership note:
+- Transport wrapper shape (including any future webhook batch wrapper object) is defined in RFC 002.
+- Delivery/commit/redelivery semantics for webhook-delivered messages are defined in RFC 003.
+
 ### 6.4 HTTP Status Mapping
 
 | HTTP | Meaning | AMP Hint |
@@ -727,4 +733,3 @@ Expected:
 1. Should Relay Profile additionally require WebSocket (`MUST`) once interop test coverage matures?
 2. Should AMPS define mandatory congestion-control and backpressure signaling in this RFC or a follow-up?
 3. Should federation wrapper receive an AMPS-native frame mapping in this RFC or a follow-up?
-4. Should webhook wrapper include optional batch delivery in this RFC or defer to RFC 003?

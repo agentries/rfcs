@@ -3,8 +3,8 @@
 **Status**: Draft
 **Authors**: Nowa
 **Created**: 2026-02-06
-**Updated**: 2026-02-06
-**Version**: 0.4
+**Updated**: 2026-02-07
+**Version**: 0.5
 
 ---
 
@@ -125,6 +125,7 @@ The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, MAY, and OPTIONAL ar
 `RFC 002 boundary`:
 - Transport handshake, framing, auth, and endpoint priority are defined in RFC 002.
 - Polling/webhook wrappers are defined in RFC 002; this RFC defines their delivery semantics.
+- Webhook wrapper object shape ownership (including any batch wrapper extension) remains in RFC 002.
 - Principal/from DID binding policy is enforced per RFC 002.
 - Federation principal binding uses RFC 002 relay-to-relay rule (`transport principal == upstream_relay`).
 - Federation handoff transport uses RFC 002 relay-forward wrapper and response mapping.
@@ -654,4 +655,4 @@ Expected:
 
 ## Appendix B. Open Questions
 
-1. Should batch webhook delivery be standardized here or kept in RFC 002/003 extension?
+No open questions in this revision.
