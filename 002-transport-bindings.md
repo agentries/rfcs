@@ -4,7 +4,7 @@
 **Authors**: Ryan Cooper, Nowa
 **Created**: 2026-02-05
 **Updated**: 2026-02-07
-**Version**: 0.15
+**Version**: 0.16
 
 ---
 
@@ -52,8 +52,9 @@ This RFC defines AMP transport bindings with a TCP-first normative model. AMPS (
 8. Error Handling and Retry
 9. Versioning and Compatibility
 10. Security Considerations
-11. Implementation Checklist
-12. References
+11. Privacy Considerations
+12. Implementation Checklist
+13. References
 Appendix A. Minimal Test Vectors
 Appendix B. Open Questions
 
@@ -600,7 +601,16 @@ Implementations MUST validate both dimensions.
 
 ---
 
-## 11. Implementation Checklist
+## 11. Privacy Considerations
+
+- Transport-layer metadata (`source IP`, auth principal, endpoint path, request timing) can reveal communication graph and activity patterns even when AMP bodies are encrypted.
+- Polling and webhook wrappers SHOULD avoid exposing business-sensitive metadata beyond required fields; logs SHOULD prefer message IDs and status codes over full payload dumps.
+- Relay operators SHOULD apply data minimization and retention bounds for transport logs, especially for auth headers and webhook signatures.
+- Federation wrappers (`relay-forward`, `relay-commit-report`) SHOULD be audited without persisting unnecessary payload copies beyond operational retention policy.
+
+---
+
+## 12. Implementation Checklist
 
 - [ ] Meets role MTI requirements in Section 2.2.
 - [ ] Preserves one transport unit = one canonical payload.
@@ -616,9 +626,9 @@ Implementations MUST validate both dimensions.
 
 ---
 
-## 12. References
+## 13. References
 
-### 12.1 Normative References
+### 13.1 Normative References
 
 - RFC 001: Agent Messaging Protocol (Core)
 - RFC 003: Relay & Store-and-Forward
@@ -627,9 +637,10 @@ Implementations MUST validate both dimensions.
 - RFC 6455: The WebSocket Protocol
 - RFC 8446: TLS 1.3
 - RFC 8949: CBOR
+- RFC 8610: CDDL
 - RFC 9110: HTTP Semantics
 
-### 12.2 Informative References
+### 13.2 Informative References
 
 - RFC 008: Agent Discovery & Directory
 - RFC 7231: HTTP/1.1 Semantics and Content (historical)
@@ -747,6 +758,28 @@ Expected:
 - reject with auth failure mapping (`3001` hint)
 - receiver MUST NOT treat transport `act_as` as delegation proof
 - no next-hop forward or queue insertion
+
+### A.13 AMPS Server Handshake Positive
+
+Given:
+- relay endpoint exposes `amps://` listener
+- client sends valid transport handshake request and receives success response
+
+Expected:
+- connection enters `OPEN` after handshake
+- endpoint is eligible for canonical binding priority (`amps > wss > https`)
+- subsequent AMP frames are accepted only after handshake completion
+
+### A.14 AMPS Server Handshake Negative
+
+Given:
+- relay endpoint exposes `amps://` listener
+- client sends invalid handshake request (for example unsupported `version` or malformed required fields)
+
+Expected:
+- handshake is rejected before `OPEN`
+- connection is closed or fails fast by policy
+- no AMP payload frame is accepted
 
 ---
 

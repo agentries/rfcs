@@ -635,6 +635,8 @@ Compatibility rules:
 - RFC 001: Agent Messaging Protocol (Core)
 - RFC 2119: Key words for use in RFCs
 - RFC 8174: Ambiguity of uppercase/lowercase in RFC 2119 keywords
+- RFC 8949: CBOR
+- RFC 8610: CDDL
 
 ### 13.2 Informative References
 
@@ -688,7 +690,7 @@ Input:
 - `capture_result` includes malformed `settlement` object shape.
 
 Expected:
-- Reject with `1001 INVALID_FORMAT`.
+- Reject with `1001 INVALID_MESSAGE`.
 
 ### A.5b Settlement Proof Binding/Signature Failure Negative
 

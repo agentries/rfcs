@@ -1,121 +1,232 @@
 # RFC 008: Agent Discovery & Directory
 
-**Status**: Proposal  
-**Authors**: TBD  
-**Created**: 2026-02-06  
-**Updated**: 2026-02-06  
-**Depends On**: RFC 001 (AMP), RFC 002 (Transport), RFC 003 (Relay), Agentries Core (DID, Capabilities)
+**Status**: Draft
+**Authors**: Nowa
+**Created**: 2026-02-06
+**Updated**: 2026-02-07
+**Version**: 0.4
+
+---
+
+## Dependencies
+
+**Depends On:**
+- RFC 001: Agent Messaging Protocol (Core)
+
+**Related:**
+- RFC 002: Transport Bindings (endpoint selection and principal binding)
+- RFC 003: Relay & Store-and-Forward (relay federation delivery semantics)
+- RFC 004: Capability Schema Registry & Compatibility (capability identifier format)
+- RFC 005: Delegation Credentials & Authorization (delegated invocation authorization)
+- RFC 006: Session Protocol (session-scoped messaging semantics)
+- RFC 009: Reputation & Trust Signals (trust/ranking signal semantics)
 
 ---
 
 ## Abstract
 
-This RFC defines how agents discover each other and publish searchable metadata for capabilities, endpoints, and operational status.
+This RFC defines interoperable discovery, contact gating, and presence semantics for AMP agents. It standardizes how agents publish and resolve reachable endpoints, enforce contact approval for discoverable agents, advertise relay federation capabilities, and exchange presence capacity signals. The goal is deterministic peer discovery without coupling AMP to one directory topology.
 
 ---
 
-## 1. Problem Statement
+## Table of Contents
 
-Agents need a reliable way to find peers beyond ad hoc links or manual configuration. Discovery must be decentralized, verifiable, and privacy-aware.
-
----
-
-## 2. Scope
-
-- Directory registration and updates
-- Search and filtering by capability
-- Freshness and liveness signals
-- Privacy controls and opt-in visibility
-- Relay federation capability advertisement for interoperable routing decisions
-
----
-
-## 3. Visibility Levels
-
-Agents control discoverability and contactability through three visibility levels:
-
-| Level | In Directory | Contactable | Use Case |
-|-------|--------------|-------------|----------|
-| `PRIVATE` | No | No | Internal agents, no external communication |
-| `DISCOVERABLE` | Yes | Requires approval | Visible but gated |
-| `OPEN` | Yes | Yes | Fully accessible public agents |
-
-### 3.1 Registration Options (Informative)
-
-```
-Visibility Level:
-○ PRIVATE     - Not listed, not contactable
-○ DISCOVERABLE - Listed, requires approval to contact
-○ OPEN        - Listed, directly contactable
-
-[If DISCOVERABLE or OPEN]
-  Endpoint options:
-  ○ Use Agentries Relay (recommended)
-  ○ Self-hosted endpoint: [________________]
-```
-
-**DID Document implications**:
-- **PRIVATE**: No AMP service, no directory listing
-- **DISCOVERABLE**: `AgentMessagingGated` service type
-- **OPEN**: `AgentMessaging` or `AgentMessagingRelay` service type
-
-### 3.2 UI Status Display (Informative)
-
-```
-┌─────────────────────────────────────┐
-│  Agent: code-review-bot             │
-│  DID: did:web:agentries.xyz:...     │
-│                                     │
-│  📩 AMP: Open                       │  ← green, directly contactable
-│  or                                 │
-│  🔔 AMP: Discoverable               │  ← yellow, request required
-│  or                                 │
-│  🔒 AMP: Private                    │  ← gray, not contactable
-└─────────────────────────────────────┘
-```
+1. Scope and Non-Goals
+2. Conformance and Profiles
+2.1 Terminology
+2.2 Role Profiles and MTI Requirements
+3. Boundary Contracts with Other RFCs
+4. Discovery Data Model
+4.1 Visibility and Contactability
+4.2 Service Types and DID Declaration
+4.3 Directory Record Model
+4.4 Relay Federation Capability Descriptor
+5. Discovery Semantics
+5.1 Resolution Sources and Precedence
+5.2 Endpoint Selection Algorithm (Deterministic)
+5.3 Contact-Gated Routing Rule
+5.4 Freshness and Expiry
+6. Contact Workflow Semantics
+6.1 CONTACT_REQUEST
+6.2 CONTACT_RESPONSE
+6.3 CONTACT_REVOKE
+6.4 Contact Relationship State Machine
+6.5 Contact Message CDDL
+7. Presence Semantics
+7.1 Presence Signal Model
+7.2 Presence Query and Push
+7.3 Presence Subscription Profile (Optional Extension)
+7.4 Presence Message CDDL
+8. Error Handling and Retry
+9. Versioning and Compatibility
+10. Security Considerations
+11. Privacy Considerations
+12. Implementation Checklist
+13. References
+Appendix A. Minimal Test Vectors
+Appendix B. Open Questions
 
 ---
 
-## 4. DID Document Service Declaration
+## 1. Scope and Non-Goals
 
-Agents wishing to receive AMP messages declare a service in their DID Document:
+This RFC defines:
+- Discovery metadata for AMP endpoint publication and selection.
+- Contact gating semantics for discoverable agents.
+- Presence message semantics and expiry handling.
+- Relay federation capability advertisement used by RFC 003 routing.
+- Deterministic error mapping for discovery/contact/presence failures.
 
-```json
-{
-  "@context": [
-    "https://www.w3.org/ns/did/v1",
-    "https://agentries.xyz/contexts/v1"
-  ],
-  "id": "did:web:agentries.xyz:agent:xxx",
-  "verificationMethod": [...],
-  "service": [
-    {
-      "id": "did:web:agentries.xyz:agent:xxx#amp",
-      "type": "AgentMessaging",
-      "serviceEndpoint": "https://amp.example.com/agent/xxx"
-    },
-    {
-      "id": "did:web:agentries.xyz:agent:xxx#amp-relay",
-      "type": "AgentMessagingRelay",
-      "serviceEndpoint": "https://relay.agentries.xyz",
-      "relayCapabilities": {
-        "federation": true,
-        "relayForwardEndpoint": "https://relay.agentries.xyz/amp/v1/relay/forward",
-        "transferModes": ["single", "dual"],
-        "maxHopLimit": 16,
-        "defaultHopLimit": 8,
-        "receiptAlgs": [-8, -7]
-      }
-    }
-  ]
+This RFC does not define:
+- AMP envelope, signature, encryption, or type-code allocation (RFC 001).
+- Transport framing and protocol negotiation details (RFC 002).
+- Relay queue retention, custody transfer, and commit semantics (RFC 003).
+- Capability schema negotiation and invocation validation semantics (RFC 004).
+- Reputation scoring or ranking models (RFC 009).
+
+---
+
+## 2. Conformance and Profiles
+
+The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, MAY, and OPTIONAL are interpreted as in RFC 2119 and RFC 8174.
+
+An implementation is conformant only if it:
+- Preserves RFC 001 message envelope/signature semantics.
+- Applies deterministic discovery and contact rules in Sections 5 and 6.
+- Applies deterministic error mapping in Section 8.
+
+### 2.1 Terminology
+
+| Term | Definition |
+|------|------------|
+| Visibility | Agent contactability policy: `PRIVATE`, `DISCOVERABLE`, or `OPEN`. |
+| Discovery record | Resolved metadata for one target DID (visibility, endpoints, freshness). |
+| Contact relationship | Policy state between requester DID and target DID for gated communication. |
+| Contact-gated endpoint | Endpoint that requires prior approval before non-contact traffic. |
+| Presence signal | Advisory runtime capacity/performance metadata published by an agent. |
+| Relay federation capability | Relay metadata (`transferModes`, `maxHopLimit`, `receiptAlgs`) used by senders/relays before forwarding. |
+
+### 2.2 Role Profiles and MTI Requirements
+
+`Discovery Client Profile`:
+- MUST resolve target DID service metadata before first send attempt.
+- MUST enforce deterministic endpoint selection in Section 5.2.
+- MUST enforce contact-gated routing rule in Section 5.3.
+- MUST enforce contact/presence message correlation rules in Sections 6 and 7.
+
+`Contact-Gated Agent Profile`:
+- MUST enforce visibility policy in Section 4.1.
+- MUST process `CONTACT_REQUEST` / `CONTACT_RESPONSE` / `CONTACT_REVOKE` as defined in Section 6.
+- MUST return `3002 CONTACT_REQUIRED` for unauthorized non-contact traffic under `DISCOVERABLE`.
+
+`Presence Publisher Profile`:
+- MUST publish `PRESENCE` payloads conforming to Section 7.4 when presence is enabled.
+- MUST include expiry metadata and treat expired presence as stale.
+
+`Presence Subscription Profile` (optional extension):
+- MAY support `PRESENCE_SUB` / `PRESENCE_UNSUB`.
+- MUST enforce subscription TTL and authorization policy if implemented.
+
+`Directory Index Profile` (optional extension):
+- MAY provide searchable index records.
+- MUST treat DID Document resolution as authoritative on conflict.
+- MUST expose freshness metadata (`updated_at`, `expires_at`) per record.
+
+---
+
+## 3. Boundary Contracts with Other RFCs
+
+This section is normative.
+
+With RFC 001:
+- RFC 001 defines type codes for `CONTACT_*` (`0x06-0x08`) and `PRESENCE_*` (`0x60-0x63`).
+- This RFC defines body semantics, state rules, and error mapping for those types.
+- Unsupported discovery semantics MAY be rejected with `1005 UNKNOWN_TYPE` per RFC 001 behavior.
+
+With RFC 002:
+- Transport binding and endpoint URL priority are defined in RFC 002.
+- This RFC defines service eligibility and contact gating; RFC 002 applies binding priority on eligible endpoints.
+- Principal/from DID binding remains governed by RFC 002.
+
+With RFC 003:
+- Relay delivery/commit semantics remain in RFC 003.
+- `relayCapabilities` declared here are consumed by RFC 003 federation routing decisions.
+
+With RFC 004:
+- Capability identifiers referenced in discovery filters MUST follow RFC 004 naming/version rules.
+- Discovery capability hints MUST NOT bypass RFC 004 validation at invocation time.
+
+With RFC 005:
+- Delegation artifacts MUST NOT bypass `DISCOVERABLE` contact policy unless target policy explicitly allows it.
+- Delegated execution authorization remains governed by RFC 005.
+
+With RFC 006:
+- Session semantics remain independent of discovery.
+- Presence and contact messages MUST NOT be treated as session-control operations.
+
+---
+
+## 4. Discovery Data Model
+
+### 4.1 Visibility and Contactability
+
+Visibility levels:
+
+| Visibility | Listed in index | Contactability |
+|------------|------------------|----------------|
+| `PRIVATE` | No | No inbound AMP traffic except local/private policy |
+| `DISCOVERABLE` | Yes | Requires approved contact relationship |
+| `OPEN` | Yes | Direct inbound AMP traffic allowed by policy |
+
+Normative rules:
+- `PRIVATE` agents MUST NOT publish public AMP service endpoints.
+- `DISCOVERABLE` agents MUST require contact approval before accepting non-contact message traffic.
+- `OPEN` agents MAY still apply local abuse/rate policies, but MUST NOT require prior contact for normal traffic.
+
+### 4.2 Service Types and DID Declaration
+
+Supported DID service `type` values:
+- `AgentMessaging`: direct AMP endpoint.
+- `AgentMessagingGated`: contact-gated AMP endpoint.
+- `AgentMessagingRelay`: relay endpoint.
+
+Service interpretation rules:
+- `AgentMessagingGated` implies `DISCOVERABLE` policy enforcement.
+- `AgentMessagingRelay` MAY include `relayCapabilities` (Section 4.4).
+- If multiple service entries exist, each entry is an independent candidate for Section 5.2 selection.
+
+### 4.3 Directory Record Model
+
+Directory index record (if an index is used):
+
+```cddl
+unix-ms = uint
+
+discovery-record = {
+  "disc_v": 1,
+  "did": tstr,
+  "visibility": "PRIVATE" / "DISCOVERABLE" / "OPEN",
+  "endpoints": [* discovery-endpoint],
+  ? "capabilities": [* tstr],   ; RFC 004 capability IDs or names
+  "updated_at": unix-ms,
+  "expires_at": unix-ms
+}
+
+discovery-endpoint = {
+  "service_id": tstr,
+  "type": "AgentMessaging" / "AgentMessagingGated" / "AgentMessagingRelay",
+  "url": tstr,
+  ? "relayCapabilities": relay-capabilities
 }
 ```
 
-**Note**: DISCOVERABLE agents SHOULD publish `AgentMessagingGated` to signal contact-approval requirements.
+Rules:
+- DID Document data is authoritative if index record conflicts.
+- Index records MUST NOT be used to route to endpoint URLs absent from DID services.
+- `expires_at <= now` means stale record and MUST NOT be used for first-choice routing.
+- Unknown optional fields MAY be ignored.
 
-### 4.1 Relay Federation Capability Descriptor (Normative)
-
-For `AgentMessagingRelay` services, federation capability metadata is defined as:
+### 4.4 Relay Federation Capability Descriptor
 
 ```cddl
 relay-capabilities = {
@@ -129,235 +240,189 @@ relay-capabilities = {
 ```
 
 Rules:
-- If `federation = true`, the service MUST include `relayForwardEndpoint`, `transferModes`, `maxHopLimit`, and `receiptAlgs`.
-- If `federation = false` or `relayCapabilities` is absent, sender/relay MUST NOT assume relay-to-relay forwarding support.
-- `defaultHopLimit` is optional; if omitted, default is `8` (RFC 003).
-- `defaultHopLimit` MUST be `<= maxHopLimit`.
-- `receiptAlgs` MUST include `-8` (COSE EdDSA / Ed25519 per RFC 003 MTI profile).
-- Receivers SHOULD prefer relays with an explicit `relayCapabilities` object over relays with implicit defaults.
+- If `federation=true`, sender metadata MUST include `relayForwardEndpoint`, `transferModes`, `maxHopLimit`, and `receiptAlgs`.
+- `defaultHopLimit` is optional; if omitted, RFC 003 default applies.
+- `defaultHopLimit` MUST be `<= maxHopLimit` when both exist.
+- `receiptAlgs` MUST include `-8` (COSE EdDSA/Ed25519 MTI alignment with RFC 003).
+- If `relayCapabilities` is absent or `federation=false`, relay-to-relay forwarding MUST NOT be assumed.
 
 ---
 
-## 5. Service Types
+## 5. Discovery Semantics
 
-| Type | Description | Use Case |
-|------|-------------|----------|
-| `AgentMessaging` | Direct AMP endpoint | Agent runs its own receiving service |
-| `AgentMessagingRelay` | Relay endpoint | Receive via relay |
-| `AgentMessagingGated` | Gated AMP endpoint | DISCOVERABLE agents requiring approval |
+### 5.1 Resolution Sources and Precedence
 
-Relay-specific notes:
-- `AgentMessagingRelay` without `relayCapabilities` is valid for basic relay usage (non-federation).
-- Federation senders MUST filter relay candidates by:
-  - `federation = true`
-  - required `transferModes` compatibility
-  - supported `receiptAlgs` intersection
-  - acceptable `maxHopLimit`
+Resolution precedence:
+1. Resolve DID Document service entries.
+2. Optionally load index record (if configured).
+3. If conflict exists, DID Document MUST win.
+4. Index metadata MUST NOT introduce routable endpoint URLs absent from DID service entries.
+
+Failure handling:
+- DID not found or no AMP service entry -> `2001 RECIPIENT_NOT_FOUND`.
+- DID resolves but no currently reachable endpoint -> `2002 ENDPOINT_UNREACHABLE`.
+
+### 5.2 Endpoint Selection Algorithm (Deterministic)
+
+Given `(recipient_did, sender_did, message_type, requires_capability?)`:
+
+1. Build candidate endpoint set from DID services and preserve DID Document service-array index as `did_order`.
+2. Optionally load index metadata for freshness/capability hints only; index metadata MUST NOT add endpoint URLs.
+3. Remove stale candidates by local freshness policy.
+4. Apply contact eligibility (Section 5.3).
+5. Apply capability hint filter if configured (informative only).
+6. For each candidate URL, compute transport priority per RFC 002 (`amps` > `wss` > `https`).
+7. Sort candidates by tuple:
+   - transport priority;
+   - `did_order` ascending (RFC 002 same-binding rule);
+   - `service_id` lexical ascending;
+   - endpoint `url` lexical ascending.
+8. Select first eligible candidate after sort.
+
+If no eligible candidate remains:
+- Return `3002` when blocked only by contact-gating policy.
+- Else return `2001` or `2002` by local evidence.
+
+### 5.3 Contact-Gated Routing Rule
+
+For target visibility `DISCOVERABLE`:
+- Allowed pre-approval message types: `CONTACT_REQUEST`, `CONTACT_RESPONSE`, `CONTACT_REVOKE`, and protocol error/handshake traffic required to complete these exchanges.
+- Any other inbound application message MUST be rejected with `3002 CONTACT_REQUIRED` unless relation state is `ACTIVE`.
+
+For target visibility `OPEN`:
+- `CONTACT_*` flow MAY still be supported for optional relationship metadata, but MUST NOT be required.
+
+For target visibility `PRIVATE`:
+- Public inbound traffic SHOULD be rejected with `2001` or policy-equivalent deny without leakage.
+
+### 5.4 Freshness and Expiry
+
+- `updated_at` and `expires_at` are advisory freshness markers for routing.
+- Expired records MAY be used only as last-resort hints and SHOULD trigger immediate refresh.
+- Presence records past `expires_at` MUST be treated as unknown.
 
 ---
 
-## 6. Discovery Flow
+## 6. Contact Workflow Semantics
 
+Direction/correlation baseline:
+- `CONTACT_REQUEST` and `CONTACT_REVOKE` MUST be initiator messages and MUST NOT carry `reply_to`.
+- `CONTACT_RESPONSE` MUST carry `reply_to` referencing the triggering `CONTACT_REQUEST.id`.
+- A `CONTACT_RESPONSE` without valid `reply_to` correlation MUST be rejected with `4001`.
+
+### 6.1 CONTACT_REQUEST
+
+Type code: `0x06`.
+
+Rules:
+- Sender MUST provide non-empty `reason`.
+- Request MAY include capability hints and expiry.
+- Request target MUST be single-recipient.
+- If `expires_at` is present and `expires_at <= now`, receiver MUST reject with `4001 BAD_REQUEST`.
+- If `expires_at` is absent, receiver MAY apply local default request lifetime and treat that as effective expiry.
+
+### 6.2 CONTACT_RESPONSE
+
+Type code: `0x07`.
+
+Rules:
+- `reply_to` MUST reference the triggering `CONTACT_REQUEST.id`.
+- Sender MUST be the contact-policy owner (target agent).
+- `status` MUST be one of `approved`, `denied`, `pending`.
+- `pending` keeps relation state in `PENDING` and SHOULD include reason when human/policy review is deferred.
+- `approved` transitions relation to `ACTIVE`.
+- For one request ID, repeated identical `pending` responses SHOULD be treated as idempotent.
+
+### 6.3 CONTACT_REVOKE
+
+Type code: `0x08`.
+
+Rules:
+- MAY be issued by either relation participant.
+- After successful revoke, relation state MUST transition to `NONE`.
+- Subsequent non-contact traffic to a `DISCOVERABLE` target MUST be denied with `3002`.
+
+### 6.4 Contact Relationship State Machine
+
+```text
+NONE
+  -> (CONTACT_REQUEST) PENDING
+PENDING
+  -> (CONTACT_RESPONSE pending) PENDING
+  -> (CONTACT_RESPONSE approved) ACTIVE
+  -> (CONTACT_RESPONSE denied) DENIED
+  -> (request expiry) EXPIRED
+ACTIVE
+  -> (CONTACT_REVOKE) NONE
+DENIED
+  -> (new CONTACT_REQUEST) PENDING
+EXPIRED
+  -> (new CONTACT_REQUEST) PENDING
 ```
-Sender                                Recipient
-   │                                      │
-   │  1. Resolve DID                      │
-   │ ───────────────────────────────────► │
-   │                                      │
-   │  2. Check DID Document               │
-   │     AgentMessaging/Relay present?    │
-   │                                      │
-   │  [Yes] 3a. Select endpoint           │
-   │        (for federation: check        │
-   │         relayCapabilities)           │
-   │ ───────────────────────────────────► │
-   │                                      │
-   │  [No]  3b. Cannot send message       │
-   │        (Agent has not enabled AMP)   │
-   │                                      │
-```
 
----
-
-## 7. Contact Request Flow (DISCOVERABLE agents)
-
-For agents with `DISCOVERABLE` visibility, a contact request handshake is required:
-
-```
-Requester                           Target (DISCOVERABLE)
-   │                                      │
-   │  1. Find agent in directory          │
-   │                                      │
-   │  2. CONTACT_REQUEST                  │
-   │     {reason: "...", capabilities: []}│
-   │ ────────────────────────────────────►│
-   │                                      │
-   │  3. Target reviews request           │
-   │     (manual or policy-based)         │
-   │                                      │
-   │  4. CONTACT_RESPONSE                 │
-   │     {status: "approved"|"denied"}    │
-   │◄──────────────────────────────────── │
-   │                                      │
-   │  [If approved]                       │
-   │  5. Normal AMP communication         │
-   │◄────────────────────────────────────►│
-```
-
-**Message Types** (defined in RFC 001):
-
-```
-CONTACT_REQUEST   = 0x06
-CONTACT_RESPONSE  = 0x07
-CONTACT_REVOKE    = 0x08
-```
-
-### 7.1 Contact Message Bodies (CDDL)
+### 6.5 Contact Message CDDL
 
 ```cddl
 contact-request-body = {
+  "disc_v": 1,
   "reason": tstr,
   ? "capabilities_offered": [* tstr],
   ? "capabilities_requested": [* tstr],
-  ? "expires": tstr
+  ? "expires_at": unix-ms
 }
 
 contact-response-body = {
+  "disc_v": 1,
   "status": "approved" / "denied" / "pending",
   ? "reason": tstr,
-  ? "granted_until": tstr,
+  ? "granted_until": unix-ms,
   ? "restrictions": any
 }
 
 contact-revoke-body = {
+  "disc_v": 1,
   ? "reason": tstr
 }
 ```
 
-### 7.2 Contact Request State Machine
-
-```
-NO_RELATIONSHIP
-  └─ CONTACT_REQUEST → PENDING
-PENDING
-  ├─ CONTACT_RESPONSE(approved) → ACTIVE
-  ├─ CONTACT_RESPONSE(denied) → DENIED
-  └─ timeout/expires → EXPIRED
-ACTIVE
-  └─ CONTACT_REVOKE → NO_RELATIONSHIP
-```
-
 ---
 
-## 8. Approval Mechanism: Policy-Based Auto-Approval
+## 7. Presence Semantics
 
-Agents SHOULD automate approval decisions via configurable policies.
+### 7.1 Presence Signal Model
 
-**Policy Types**:
+Presence is advisory capacity metadata, not authorization data.
 
-| Policy | Description | Example |
-|--------|-------------|---------|
-| **Organization Trust** | Same organization → auto-approve | `org:acme-corp` agents approved |
-| **Reputation Threshold** | Score-based gating | `reputation > 0.8` → approve |
-| **Capability Whitelist** | Safe operations auto-approved | `read-only` → approve |
-| **Credential Verification** | VC holders approved | Has `TrustedDeveloper` VC → approve |
-| **Explicit Allowlist** | Pre-approved DIDs | `did:web:...:agent:trusted-bot` → approve |
-| **Default Deny** | Fallback for unmatched | No match → deny |
+Rules:
+- Consumers MUST NOT treat presence as permission to bypass auth/delegation/policy checks.
+- `capacity.accepting_requests=false` is a load signal, not a cryptographic deny.
 
-**Policy Configuration Example**:
+### 7.2 Presence Query and Push
 
-```json
-{
-  "approval_policy": {
-    "rules": [
-      {
-        "name": "same-org",
-        "condition": {"org": "$self.org"},
-        "action": "approve",
-        "restrictions": {"rate_limit": 1000}
-      },
-      {
-        "name": "high-reputation",
-        "condition": {"reputation": {"$gte": 0.8}},
-        "action": "approve",
-        "restrictions": {"rate_limit": 100}
-      },
-      {
-        "name": "read-only-requests",
-        "condition": {"capabilities_requested": {"$subset": ["read", "query"]}},
-        "action": "approve"
-      },
-      {
-        "name": "verified-developers",
-        "condition": {"credentials": {"$contains": "TrustedDeveloperVC"}},
-        "action": "approve"
-      },
-      {
-        "name": "default",
-        "condition": true,
-        "action": "deny"
-      }
-    ],
-    "human_fallback": false
-  }
-}
-```
+Type codes:
+- `PRESENCE` (`0x60`)
+- `PRESENCE_QUERY` (`0x61`)
 
-**Evaluation Order**: Rules are evaluated top-to-bottom; first match wins.
+Rules:
+- `PRESENCE_QUERY` is a request message and SHOULD target one recipient.
+- A direct answer to `PRESENCE_QUERY` MUST be `PRESENCE` with `reply_to` referencing the query message ID.
+- Unsolicited/push `PRESENCE` messages MUST NOT set `reply_to`.
+- `PRESENCE` SHOULD include `expires_at`.
+- `PRESENCE_QUERY` MAY include an optional capability filter.
+- Query response MAY be direct `PRESENCE` or policy-denied error.
 
-**Human-in-the-Loop (Optional)**:
-- High-value agents MAY enable `human_fallback: true`.
-- Unmatched requests queue for human review.
-- This is the exception, not the norm.
+### 7.3 Presence Subscription Profile (Optional Extension)
 
----
+Type codes:
+- `PRESENCE_SUB` (`0x62`)
+- `PRESENCE_UNSUB` (`0x63`)
 
-## 9. Presence & Status
+Rules if implemented:
+- Subscription TTL MUST be bounded.
+- Publisher SHOULD enforce rate limits and authorization policy.
+- Unsupported subscription profile MAY return `1005 UNKNOWN_TYPE`.
 
-### 9.1 Design Principle: Capability Signals, Not Intent Signals
-
-Presence should express **capacity data** rather than human-oriented intent. Implementations MAY derive UI labels, but the protocol transmits raw signals.
-
-### 9.2 Presence Message
-
-```cbor
-{
-  "typ": 0x60,  ; PRESENCE
-  "body": {
-    "capacity": {
-      "concurrent_max": 10,
-      "concurrent_current": 3,
-      "queue_depth": 0,
-      "accepting_requests": true
-    },
-    "performance": {
-      "estimated_response_ms": 500,
-      "p95_response_ms": 2000
-    },
-    "offline_until": null,
-    "expires": "2026-02-04T13:00:00Z"
-  }
-}
-```
-
-**Field Notes**:
-- `offline_until` uses Unix timestamp (milliseconds) or `null` for online.
-- `expires` is an RFC 3339 UTC timestamp string.
-
-### 9.3 Deriving Human-Friendly Status (Informative)
-
-```
-if offline_until != null:
-    display "AWAY"
-elif not accepting_requests:
-    display "DND"
-elif concurrent_current / concurrent_max > 0.8:
-    display "BUSY"
-else:
-    display "AVAILABLE"
-```
-
-### 9.4 Presence Message Bodies (CDDL)
+### 7.4 Presence Message CDDL
 
 ```cddl
 presence-capacity = {
@@ -373,120 +438,281 @@ presence-performance = {
 }
 
 presence-body = {
+  "pres_v": 1,
   "capacity": presence-capacity,
-  "performance": presence-performance,
-  "offline_until": null / uint,
-  "expires": tstr
+  ? "performance": presence-performance,
+  "offline_until": null / unix-ms,
+  "expires_at": unix-ms
 }
 
 presence-query-body = {
+  "pres_v": 1,
   ? "capability": tstr
 }
 
 presence-sub-body = {
+  "pres_v": 1,
   ? "capability": tstr,
   ? "ttl_ms": uint
 }
 
 presence-unsub-body = {
+  "pres_v": 1,
   ? "capability": tstr
 }
 ```
 
-### 9.5 Presence Discovery
+---
 
-Agents MAY:
-1. **Push**: Broadcast presence to known peers
-2. **Pull**: Respond to `PRESENCE_QUERY` requests
-3. **Subscribe**: Allow peers to subscribe to presence changes
+## 8. Error Handling and Retry
 
-```
-PRESENCE        = 0x60
-PRESENCE_QUERY  = 0x61
-PRESENCE_SUB    = 0x62
-PRESENCE_UNSUB  = 0x63
-```
+Deterministic mapping:
 
-### 9.6 Use Cases
+| Condition | Code | Retry |
+|-----------|------|-------|
+| Malformed discovery/contact/presence body | `1001` | No |
+| Unsupported `disc_v` or `pres_v` | `1004` | No |
+| Unsupported discovery message type/profile (`CONTACT_*`/`PRESENCE_*` not implemented) | `1005` | No |
+| Recipient DID or AMP service not found | `2001` | Maybe |
+| Endpoint not reachable | `2002` | Yes |
+| Contact approval required for gated target | `3002` | No (until policy/state changes) |
+| Unauthorized actor for contact policy mutation | `3001` | No |
+| Expired/invalid contact request window (`expires_at`) | `4001` | No |
+| Invalid relay federation capability metadata (`relayCapabilities`) | `4001` | No |
+| Invalid workflow/correlation state (`reply_to`, illegal transition, pending misuse) | `4001` | No |
+| Directory or metadata source temporarily unavailable | `5002` | Yes |
+| Internal discovery/policy engine failure | `5001` | Yes |
 
-- **Intelligent Routing**: Route to lowest `concurrent_current / concurrent_max` ratio.
-- **SLA Estimation**: Check `estimated_response_ms` before invoking.
-- **Graceful Degradation**: If `accepting_requests` is false, try alternative agents.
+Retry guidance:
+- `2002`, `5002`, `5001` MAY be retried with bounded backoff.
+- `3002` SHOULD only be retried after successful contact approval.
+- `100x/3001/4001` SHOULD NOT be retried without payload/policy changes.
 
 ---
 
-## 10. Interoperability (Informative)
+## 9. Versioning and Compatibility
 
-### 10.1 A2A Compatibility Layer
+Version dimensions:
+- AMP envelope version `v` is governed by RFC 001.
+- Discovery/contact body version `disc_v` is fixed at `1` in this revision.
+- Presence body version `pres_v` is fixed at `1` in this revision.
 
-AMP agents MAY expose an A2A-compatible Agent Card for discovery in the A2A ecosystem:
-
-```json
-{
-  "name": "code-review-bot",
-  "description": "Automated code review agent",
-  "url": "https://agents.example.com/code-review",
-  "protocols": {
-    "a2a": "https://agents.example.com/code-review/a2a",
-    "amp": "did:web:agentries.xyz:agent:code-review#amp"
-  },
-  "capabilities": [
-    {
-      "id": "org.agentries.code-review:2.1.0",
-      "name": "org.agentries.code-review",
-      "description": "Review code for issues and suggestions"
-    }
-  ]
-}
-```
-
-### 10.2 Protocol Selection
-
-When both A2A and AMP are available, agents SHOULD prefer AMP.
-
-```
-1. Discover agent via A2A directory (Agent Card)
-2. Check if AMP endpoint is listed
-3. If both support AMP → use AMP (more efficient)
-4. If only A2A → fall back to A2A (compatible)
-```
-
-### 10.3 Bridge Agents
-
-Bridge agents can translate between AMP and A2A-only agents:
-
-```
-┌──────────┐    AMP     ┌──────────┐    A2A    ┌──────────┐
-│ AMP-only │ ─────────► │  Bridge  │ ────────► │ A2A-only │
-│  Agent   │            │  Agent   │           │  Agent   │
-└──────────┘            └──────────┘           └──────────┘
-```
-
-### 10.4 MCP Tool Bridge
-
-AMP capabilities MAY be exposed as MCP tools for LLM application integration.
-
-```
-AMP Capability: org.agentries.code-review:2.0
-       ↓
-MCP Tool: {
-  "name": "code_review",
-  "description": "...",
-  "inputSchema": {...}
-}
-```
+Compatibility rules:
+- Receivers MUST reject unsupported `disc_v`/`pres_v` with `1004`.
+- Unknown optional fields MAY be ignored unless security-sensitive.
+- Backward-compatible additions MUST be optional fields.
 
 ---
 
-## 11. Out of Scope
+## 10. Security Considerations
 
-- Reputation scoring (see RFC 009)
-- Transport bindings (see RFC 002)
-- Relay queue retention and commit semantics (see RFC 003)
+- Discovery metadata from index services is advisory; DID Document resolution is authoritative.
+- Contact workflow decisions MUST rely on signed AMP messages and validated sender identity.
+- Implementations MUST apply RFC 002 principal/from binding for contact and presence traffic.
+- Contact endpoints SHOULD rate-limit request spam and enforce abuse controls.
+- Presence metadata can be spoofed if signature validation is skipped; recipients MUST validate signatures per RFC 001.
+- Relay federation capability claims SHOULD be validated against trusted DID methods before use.
 
 ---
 
-## 12. Open Questions
+## 11. Privacy Considerations
 
-- Minimum metadata required for listing
-- Cache invalidation and staleness rules
+- Visibility defaults SHOULD be conservative (`PRIVATE` or `DISCOVERABLE`) to reduce unsolicited profiling.
+- Presence signals may leak workload patterns; publishers SHOULD coarsen or quantize fields for public audiences.
+- Directory index services SHOULD minimize retained metadata and publish retention policy.
+- Contact deny responses SHOULD avoid leaking policy internals beyond required protocol signals.
+
+---
+
+## 12. Implementation Checklist
+
+- Implement visibility and contactability policy (Section 4.1).
+- Parse DID service types and relay capability metadata (Sections 4.2, 4.4).
+- Implement deterministic endpoint selection and contact-gated routing (Section 5).
+- Implement `CONTACT_*` workflow and state transitions (Section 6).
+- Implement `PRESENCE` schema and expiry handling (Section 7).
+- Apply deterministic error mapping (Section 8).
+- Enforce version checks for `disc_v` and `pres_v` (Section 9).
+- Add Appendix A vectors to conformance test plan.
+
+---
+
+## 13. References
+
+### 13.1 Normative References
+
+- RFC 001: Agent Messaging Protocol (Core)
+- RFC 002: Transport Bindings
+- RFC 003: Relay & Store-and-Forward
+- RFC 004: Capability Schema Registry & Compatibility
+- RFC 2119: Key words for use in RFCs
+- RFC 8174: Ambiguity of uppercase/lowercase in RFC 2119 keywords
+- RFC 8610: CDDL
+
+### 13.2 Informative References
+
+- RFC 005: Delegation Credentials & Authorization
+- RFC 006: Session Protocol
+- RFC 009: Reputation & Trust Signals
+- DID Core (W3C Recommendation)
+
+---
+
+## Appendix A. Minimal Test Vectors
+
+### A.1 OPEN Discovery Positive
+
+Input:
+- Recipient publishes `AgentMessaging` endpoint with visibility `OPEN`.
+
+Expected:
+- Sender selects direct endpoint via Section 5.2.
+
+### A.2 DISCOVERABLE Contact Required Negative
+
+Input:
+- Recipient visibility `DISCOVERABLE`.
+- No active contact relationship.
+- Sender sends non-contact message.
+
+Expected:
+- Reject with `3002 CONTACT_REQUIRED`.
+
+### A.3 CONTACT_REQUEST to CONTACT_RESPONSE Approved Positive
+
+Input:
+- Valid `CONTACT_REQUEST`, then target replies `CONTACT_RESPONSE(status="approved")`.
+
+Expected:
+- Relationship transitions `NONE -> PENDING -> ACTIVE`.
+
+### A.4 CONTACT_RESPONSE Correlation Negative
+
+Input:
+- `CONTACT_RESPONSE.reply_to` missing or points to non-contact request.
+
+Expected:
+- Reject with `4001 BAD_REQUEST`.
+
+### A.5 CONTACT_REVOKE Positive
+
+Input:
+- Active relationship, then `CONTACT_REVOKE`.
+
+Expected:
+- Relationship transitions to `NONE`.
+- Subsequent non-contact traffic to `DISCOVERABLE` target fails with `3002`.
+
+### A.6 PRIVATE Visibility Routing Negative
+
+Input:
+- Target is `PRIVATE` with no public AMP service.
+
+Expected:
+- Discovery fails with `2001` or policy-equivalent non-leaking denial.
+
+### A.7 Relay Federation Capability Positive
+
+Input:
+- `AgentMessagingRelay` contains `relayCapabilities` with `federation=true`, required fields, and `receiptAlgs` includes `-8`.
+
+Expected:
+- Candidate is federation-eligible for RFC 003 routing.
+
+### A.8 Relay Federation Capability Invalid Negative
+
+Input:
+- `federation=true` but missing `relayForwardEndpoint` or `receiptAlgs` omits `-8`.
+
+Expected:
+- Candidate rejected as invalid metadata (`4001 BAD_REQUEST`).
+
+### A.9 Presence Publish/Query Positive
+
+Input:
+- Valid `PRESENCE` (`pres_v=1`) and valid `PRESENCE_QUERY`.
+
+Expected:
+- Presence accepted and query returns current non-expired signal.
+
+### A.10 Presence Expiry Handling
+
+Input:
+- Presence with `expires_at < now`.
+
+Expected:
+- Consumer treats presence as stale/unknown and excludes it from first-choice routing.
+
+### A.11 Unsupported Body Version Negative
+
+Input:
+- `CONTACT_REQUEST` with `disc_v=2` or `PRESENCE` with `pres_v=2`.
+
+Expected:
+- Reject with `1004 UNSUPPORTED_VERSION`.
+
+### A.12 Presence Subscription Unsupported Profile
+
+Input:
+- Receiver does not implement subscription profile; sender sends `PRESENCE_SUB`.
+
+Expected:
+- If subscription message types are not implemented, reject with `1005 UNKNOWN_TYPE`.
+- If type is recognized but disabled by local policy/profile, reject with `4001 BAD_REQUEST`.
+
+### A.13 Presence Query Correlation Negative
+
+Input:
+- `PRESENCE_QUERY` sent.
+- Responder sends `PRESENCE` without `reply_to` (or with mismatched `reply_to`) as direct answer.
+
+Expected:
+- Reject with `4001 BAD_REQUEST` at query-response handler boundary.
+
+### A.14 Contact Pending Semantics Positive
+
+Input:
+- Valid `CONTACT_REQUEST`.
+- Target replies `CONTACT_RESPONSE(status="pending")` twice with same semantics.
+
+Expected:
+- Relationship remains `PENDING`.
+- Repeated pending response is treated idempotently.
+
+### A.15 Expired CONTACT_REQUEST Negative
+
+Input:
+- `CONTACT_REQUEST.expires_at <= now`.
+
+Expected:
+- Reject with `4001 BAD_REQUEST`.
+
+### A.16 Byte-Level Error Code Checks
+
+Input:
+- Contact-gated denial case mapped to `3002`.
+- Correlation/expired-window failure case mapped to `4001`.
+- Unsupported discovery/presence body version case mapped to `1004`.
+
+Expected:
+- `3002` CBOR uint encoding bytes: `19 0b ba`.
+- `4001` CBOR uint encoding bytes: `19 0f a1`.
+- `1004` CBOR uint encoding bytes: `19 03 ec`.
+
+---
+
+## Appendix B. Open Questions
+
+No open questions in this revision.
+
+---
+
+## Changelog
+
+| Date | Version | Author | Changes |
+|------|---------|--------|---------|
+| 2026-02-06 | Proposal | TBD | Initial outline for discovery and directory concepts |
+| 2026-02-07 | 0.1 | Nowa | Rewrote RFC 008 into normative draft format with conformance profiles, cross-RFC boundary contracts, deterministic discovery/contact/presence semantics, CDDL, error mapping, and minimal test vectors |
+| 2026-02-07 | 0.2 | Nowa | Fixed deterministic endpoint tie-break ordering, formalized contact/presence direction and correlation rules, defined pending/expiry semantics, and added byte-level error-code checks |
+| 2026-02-07 | 0.3 | Nowa | Aligned endpoint selection priority with RFC 002 (`transport` first), prohibited index-only endpoint injection, tightened `1005` usage boundaries, and made invalid federation metadata mapping deterministic (`4001`) |
+| 2026-02-07 | 0.4 | Nowa | Added explicit Section 8 error mapping for invalid `relayCapabilities` metadata and synchronized optional conformance vector coverage for RFC 008 |

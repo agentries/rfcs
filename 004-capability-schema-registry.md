@@ -670,6 +670,8 @@ Capability lifecycle guidance:
 - RFC 001: Agent Messaging Protocol (Core)
 - RFC 2119: Key words for use in RFCs
 - RFC 8174: Ambiguity of uppercase/lowercase in requirement words
+- RFC 8949: CBOR
+- RFC 8610: CDDL
 - Semantic Versioning 2.0.0
 
 ### 14.2 Informative References

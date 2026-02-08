@@ -535,6 +535,7 @@ Compatibility rules:
 - RFC 2119: Key words for use in RFCs
 - RFC 8174: Ambiguity of uppercase/lowercase in requirement words
 - RFC 8949: CBOR
+- RFC 8610: CDDL
 - RFC 9052: COSE Structures
 
 ### 13.2 Informative References

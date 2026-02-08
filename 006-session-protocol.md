@@ -4,7 +4,7 @@
 **Authors**: Ryan Cooper, Nowa
 **Created**: 2026-02-04
 **Updated**: 2026-02-07
-**Version**: 0.8
+**Version**: 0.9
 
 ---
 
@@ -254,7 +254,7 @@ Dispatch boundary:
   - message is provisional (`PROCESSING`/`PROGRESS`/`INPUT_REQUIRED`) and `reply_to` resolves to an in-flight session-scoped request.
 - Messages that do not meet the above conditions are treated as non-session application payload and MUST NOT mutate session state.
 - Envelope `thread_id` matching an active `session_id` MUST NOT, by itself, establish session scope.
-- If envelope `thread_id` matches an active `session_id` but `body.session.session_scope` is absent, receiver SHOULD reject with `4001` to avoid ambiguous interpretation.
+- If envelope `thread_id` matches an active `session_id` but `body.session.session_scope` is absent, receiver MUST reject with `4001` to avoid ambiguous interpretation.
 
 `coupled` mode:
 - Session-scoped non-control messages MUST include signed `body.session` context with `session_scope = true`.
@@ -646,6 +646,7 @@ Compatibility rules:
 - RFC 2119: Key words for use in RFCs
 - RFC 8174: Ambiguity of uppercase/lowercase in RFC 2119 keywords
 - RFC 8949: CBOR
+- RFC 8610: CDDL
 
 ### 14.2 Informative References
 
@@ -800,7 +801,7 @@ Input:
 - Session-scoped non-control message carries `body.session` as non-map (for example string), or `body.session.session_id` with wrong size, or non-true `session_scope`.
 
 Expected:
-- Reject with `1001 INVALID_FORMAT`.
+- Reject with `1001 INVALID_MESSAGE`.
 
 ### A.17 Byte-Level Error Code Checks
 
@@ -833,3 +834,4 @@ No open questions in this revision.
 | 2026-02-07 | 0.6 | Nowa | Aligned request-handling state machine error ranges with Section 9 deterministic mappings (including 1xxx parse/version failures) |
 | 2026-02-07 | 0.7 | Nowa | Added explicit `session_scope=true` marker for session-scoped non-control dispatch, removed implicit thread-only session entry, and aligned error/vector coverage for ambiguity prevention |
 | 2026-02-07 | 0.8 | Nowa | Added minimal byte-level error-code checks for session interop vectors (`1001`/`4001`) |
+| 2026-02-07 | 0.9 | Nowa | Made ambiguous session-context omission handling deterministic by requiring `4001` when `thread_id` matches active `session_id`; added RFC 8610 normative reference for CDDL sections |

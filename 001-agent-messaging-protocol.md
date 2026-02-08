@@ -4,7 +4,7 @@
 **Authors**: Ryan Cooper, Jason Apple Huang  
 **Created**: 2026-02-04  
 **Updated**: 2026-02-07  
-**Version**: 0.42
+**Version**: 0.43
 
 ---
 
@@ -118,14 +118,14 @@ Conformance profiles:
 | §8 Security Considerations | MUST | MUST | Signing/encryption/verification |
 | §9 Agentries Integration (AMP Discovery) | Optional | Optional | Semantics in RFC 008 |
 | §10 Presence & Status | Optional | Optional | Semantics in RFC 008 |
-| §11 Provisional Responses | Optional | Optional | Semantics in RFC 006 |
+| §11 Provisional Responses | Optional | MUST | Semantics in RFC 006 |
 | §12 Capability Namespacing & Versioning | Optional | MUST | Normative details in RFC 004 |
 | §13 Protocol Version Negotiation | MUST | MUST | HELLO flow and mapping |
 | §14 Interoperability | Informative | Informative | Ecosystem guidance |
 | §15 Error Codes | MUST | MUST | Error taxonomy and handling |
 | §16 Acknowledgment Semantics | MUST | MUST | ACK/PROC/idempotency rules |
 | §17 Registry Governance | SHOULD | SHOULD | Allocation and registration process |
-| Appendix A Test Vectors | MUST (core vectors) | MUST (full vectors) | Acceptance evidence |
+| Appendix A Test Vectors | MUST (core vectors) | MUST (required Full vectors; optional extension vectors excluded) | Acceptance evidence |
 | Appendix B Implementation Notes | Informative | Informative | Non-normative guidance |
 
 ### 1.5.2 Interop Certification Gate
@@ -134,7 +134,10 @@ Status transition requirement for `AMP Full`:
 - Advancing to `Accepted/Implementation-Ready` MUST require a public interoperability conformance suite.
 - The gate MUST include at least two independent implementations that pass the required Full-profile vectors.
 - Certification artifacts SHOULD include versioned test reports and reproducible vector references.
-- The conformance suite MUST publish a versioned vector set identifier and referenced RFC versions (`001`-`006`) used for evaluation.
+- The conformance suite MUST publish a versioned vector set identifier, referenced RFC versions, and profile-specific required-vector definitions used for evaluation.
+- `amp-full-core-001-006` is the default `AMP Full` gate profile in this revision.
+- `amp-full-stack-001-009` is an additional full-stack profile that promotes selected RFC 007/008/009 vectors to required.
+- For `amp-full-core-001-006`, RFC 007/008/009 remain optional extensions and are not required for gate pass.
 - The canonical suite artifact set MUST be published in the AMP specification repository under a stable versioned location (for example `conformance/<suite_version>/`).
 - Each candidate implementation MUST publish a machine-readable report (for example `interop-report.json`) including at least:
   - implementation identifier and version;
@@ -142,6 +145,7 @@ Status transition requirement for `AMP Full`:
   - per-vector pass/fail results;
   - environment metadata sufficient for rerun.
 - Acceptance decision MUST be based on required-vector pass results only; optional profile vectors MUST be reported separately.
+- Required vectors MUST NOT be reported as `skip`; each required vector MUST have an explicit `pass` or `fail` result.
 - Conformance suite governance MUST be maintained by AMP editors, and suite-breaking changes MUST follow the RFC change-control process.
 
 ### 1.6 Terminology
@@ -193,7 +197,7 @@ The requirements below describe the full AMP target. For strict `AMP Core` confo
 - **R17**: Support delegation revocation
 
 ### 2.7 Interoperability
-- **R18**: Transport-layer agnostic (HTTP, WebSocket, TCP, UDP...)
+- **R18**: Transport-layer agnostic by architecture; this revision normatively defines AMPS/TCP, WebSocket, and HTTP bindings in RFC 002, with QUIC/UDP reserved for future RFCs.
 - **R19**: Support document exchange (any MIME type)
 - **R20**: Support credential exchange (Verifiable Credentials)
 
@@ -462,7 +466,7 @@ HELLO_REJECT      = 0x72    ; No compatible version found
 ; EXTENSION (0xF0-0xFF) — Vendor/experimental extensions
 ; ═══════════════════════════════════════════════════════════════
 EXTENSION         = 0xF0    ; Extension message (see ext field)
-; 0xF1-0xFF reserved for future extension types
+; 0xF1-0xFF available for vendor/experimental extension types
 ```
 
 **Type Semantics**:
@@ -1295,13 +1299,13 @@ SELECT
 
 ## 14. Interoperability
 
-Ecosystem interoperability guidance (A2A/MCP bridges) is defined in **RFC 008**.
+This section provides AMP interoperability guidance for A2A/MCP bridge implementations.
 
 **Boundary Contract (Normative)**:
 - Bridges MUST preserve signed AMP message semantics end-to-end.
 - Any bridge-level metadata MUST remain outside signed AMP fields unless explicitly modeled in body schemas.
 
-See: `008-agent-discovery-directory.md`
+Discovery/contact/presence semantics remain in `008-agent-discovery-directory.md`.
 
 ---
 
@@ -1834,18 +1838,59 @@ Message (hex):
 a9617601626964500000018d746b4e70000000000000000962746f781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626274731b0000018d746b4e706373696758401310b69203a2eb3c52444e564c8bba1b238f6195f564453a0d53bc041f3bc376f88bd8d36f2dff67d0a436c00409108ad7b70b7e9f49d9f7ae384d18fc47d6066374746c1a05265c0063747970185064626f6479a36573636f7065a16c6361706162696c697469657382686361702e72656164696361702e7772697465676578706972657374323032362d31322d33315432333a35393a35395a6a63726564656e7469616ca36269646964656c65672d30303166697373756572781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c696365677375626a656374781d6469643a7765623a6578616d706c652e636f6d3a6167656e743a626f626466726f6d781f6469643a7765623a6578616d706c652e636f6d3a6167656e743a616c696365
 ```
 
-### A.10 Full Profile Coverage Matrix
+### A.10 Vector 8: BATCH Container (Two Inner Messages)
+
+Input:
+- Outer message `typ=0x16 (BATCH)` with `body.items` containing exactly two valid CBOR-encoded `amp-message` items:
+  - item[0]: `MESSAGE` with `id=m1`
+  - item[1]: `REQUEST` with `id=m2`
+- Both inner items are individually signed and structurally valid.
+
+Expected:
+- Receiver decodes the container and processes `item[0]` and `item[1]` as independent messages.
+- ACK/ERROR correlation for inner processing uses inner IDs (`m1`, `m2`), not only the batch container ID.
+- If receiver emits per-item error, it includes deterministic `batch_index` for the failing item.
+
+### A.11 Vector 9: DOC_SEND Inline MIME Baseline
+
+Input:
+- Valid `DOC_SEND (typ=0x30)` with:
+  - `content_type = "application/pdf"`
+  - `filename = "report.pdf"`
+  - `size` matching `data` length
+  - deterministic `hash` for `data`
+
+Expected:
+- Receiver accepts document body as valid inline document payload.
+- MIME value is preserved byte-exactly in application handling.
+- If hash verification is enforced by policy, computed hash matches provided hash.
+
+### A.12 Vector 10: DOC_REQUEST MIME Diversity (Optional Extension Coverage)
+
+Input:
+- Valid `DOC_REQUEST (typ=0x31)` with:
+  - `doc_id = "doc-2026-01"`
+  - `accept = "application/json"`
+- Responder returns `DOC_SEND` with `content_type = "application/json"` and valid body fields.
+
+Expected:
+- Request/response exchange is accepted under RFC 001 document body schema.
+- Receiver does not coerce MIME to `text/*` defaults.
+- MIME negotiation result remains application-controlled and schema-valid.
+
+### A.13 Full Profile Coverage Matrix
 
 | Area | Minimum Vector Set | Source |
 |------|---------------------|--------|
 | Core envelope/signature | A.2, A.3 | RFC 001 |
-| Streaming/documents | A.5 | RFC 001 |
-| Encryption | A.6 + N3 | RFC 001 |
+| Streaming/documents | A.5, A.10, A.11 (A.12 optional MIME diversity) | RFC 001 |
+| Encryption | A.6 (negative coverage with A.7/N3 is RECOMMENDED) | RFC 001 |
 | Credentials | A.8 | RFC 001 |
 | Delegation | A.9 + RFC004 A.18/A.19 + RFC005 vectors | RFC 001/004/005 |
-| Capability semantics | RFC004 capability vectors | RFC 004 |
-| Provisional responses | RFC006 session vectors | RFC 006 |
-| Discovery/presence/contact | RFC008 discovery vectors | RFC 008 |
+| Capability semantics | RFC004 A.2/A.15/A.18/A.19/A.23 | RFC 004 |
+| Provisional responses | RFC006 A.3/A.4 + session vectors | RFC 006 |
+| Discovery/presence/contact (optional extension) | RFC008 discovery vectors | RFC 008 (optional) |
+| Payment/discovery/reputation (full-stack profile) | RFC007 A.18/A.21 + RFC008 A.4/A.8/A.9 + RFC009 A.23/A.24/A.25/A.26 | RFC 007/008/009 |
 
 ---
 
@@ -1912,3 +1957,4 @@ Versioning note: public version numbers were reset on 2026-02-06 for external pu
 | 2026-02-07 | 0.40 | 5.29 | Nowa | Resolved interop certification open question by defining an AMP Full Accepted/Implementation-Ready gate with public conformance suite and multi-implementation evidence |
 | 2026-02-07 | 0.41 | 5.30 | Nowa | Expanded interop certification gate into executable requirements: versioned vector set references, required report fields, and acceptance decision basis |
 | 2026-02-07 | 0.42 | 5.31 | Nowa | Added conformance suite publication location and governance requirements for Accepted/Implementation-Ready gate auditability |
+| 2026-02-07 | 0.43 | 5.32 | Nowa | Added batch and document MIME test vectors (`A.10`/`A.11`) to close R10/R19 gate coverage, added optional MIME diversity vector (`A.12`), and updated Full coverage matrix mapping |

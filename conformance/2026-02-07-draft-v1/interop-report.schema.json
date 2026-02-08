@@ -3,12 +3,7 @@
   "$id": "https://agentries.dev/conformance/2026-02-07-draft-v1/interop-report.schema.json",
   "title": "AMP Interop Report",
   "type": "object",
-  "required": [
-    "suite_version",
-    "implementation",
-    "run",
-    "results"
-  ],
+  "required": ["suite_version", "implementation", "run", "results"],
   "properties": {
     "suite_version": {
       "type": "string",

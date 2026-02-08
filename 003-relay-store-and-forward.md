@@ -535,6 +535,7 @@ Retry guidance:
 - RFC 2119: Key words for use in RFCs
 - RFC 8174: Ambiguity of uppercase/lowercase in RFC 2119 keywords
 - RFC 8949: CBOR
+- RFC 8610: CDDL
 - RFC 9052: CBOR Object Signing and Encryption (COSE)
 - RFC 9053: COSE Algorithms
 

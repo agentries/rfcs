@@ -25,15 +25,15 @@ Note: **Accepted** indicates implementation-ready specifications (byte-accurate 
 
 | RFC | Title | Status | Author | Last Updated |
 |-----|-------|--------|--------|--------------|
-| 001 | [Agent Messaging Protocol (AMP Core)](001-agent-messaging-protocol.md) | Draft v0.42 | Ryan Cooper, Jason Apple Huang | 2026-02-07 |
-| 002 | [Transport Bindings (TCP-first, HTTP/WS mappings)](002-transport-bindings.md) | Draft v0.15 | Ryan Cooper, Nowa | 2026-02-07 |
+| 001 | [Agent Messaging Protocol (AMP Full Entry + Core Subset)](001-agent-messaging-protocol.md) | Draft v0.43 | Ryan Cooper, Jason Apple Huang | 2026-02-07 |
+| 002 | [Transport Bindings (TCP-first, HTTP/WS mappings)](002-transport-bindings.md) | Draft v0.16 | Ryan Cooper, Nowa | 2026-02-07 |
 | 003 | [Relay & Store-and-Forward](003-relay-store-and-forward.md) | Draft v0.61 | Nowa | 2026-02-07 |
 | 004 | [Capability Schema Registry & Compatibility](004-capability-schema-registry.md) | Draft v0.12 | Ryan Cooper, Nowa | 2026-02-07 |
 | 005 | [Delegation Credentials & Authorization](005-delegation-authorization.md) | Draft v0.34 | Ryan Cooper, Nowa | 2026-02-07 |
-| 006 | [Session Protocol (State + Recovery)](006-session-protocol.md) | Draft v0.8 (coupled MTI + optional independent thread profile + explicit session_scope marker) | Ryan Cooper, Nowa | 2026-02-07 |
+| 006 | [Session Protocol (State + Recovery)](006-session-protocol.md) | Draft v0.9 (coupled MTI + optional independent thread profile + explicit session_scope marker) | Ryan Cooper, Nowa | 2026-02-07 |
 | 007 | [Agent Payment Protocol](007-agent-payment-protocol.md) | Draft v0.34 (CAP precedence + session source-of-truth + split descriptor failure vectors + byte checks) | Ryan Cooper, Nowa | 2026-02-07 |
-| 008 | [Agent Discovery & Directory](008-agent-discovery-directory.md) | Proposal (relay federation capability descriptor added) | - | 2026-02-06 |
-| 009 | [Reputation & Trust Signals](009-reputation-trust-signals.md) | Planned (Future) | - | 2026-02-06 |
+| 008 | [Agent Discovery & Directory](008-agent-discovery-directory.md) | Draft v0.4 | Nowa | 2026-02-07 |
+| 009 | [Reputation & Trust Signals](009-reputation-trust-signals.md) | Draft v0.11 (session/CAP negative vectors + 3004 byte-level checks) | Nowa | 2026-02-07 |
 | 010 | [Observability & Evaluation Telemetry](010-observability-evaluation-telemetry.md) | Planned (Future) | - | 2026-02-06 |
 | 011 | [Multi-Agent Coordination & Group Messaging](011-multi-agent-coordination.md) | Planned (Future) | - | 2026-02-06 |
 
@@ -88,7 +88,7 @@ Note: **Accepted** indicates implementation-ready specifications (byte-accurate 
 - State sharing format
 - Persistence and resumption
 
-*Note: Draft v0.8 keeps `coupled` (`thread_id==session_id`) as MTI baseline, adds optional `independent` thread mode, and requires explicit `session_scope=true` marker for unambiguous session-scoped non-control dispatch.*
+*Note: Draft v0.9 keeps `coupled` (`thread_id==session_id`) as MTI baseline, adds optional `independent` thread mode, and requires explicit `session_scope=true` marker for unambiguous session-scoped non-control dispatch.*
 
 ### RFC 007: Agent Payment Protocol
 **Problem**: Agents need to pay each other for services.
