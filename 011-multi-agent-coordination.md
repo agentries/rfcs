@@ -4,7 +4,7 @@
 **Authors**: Nowa
 **Created**: 2026-02-06
 **Updated**: 2026-02-08
-**Version**: 0.1
+**Version**: 0.3
 
 ---
 
@@ -108,6 +108,7 @@ An implementation is conformant only if it:
 | Coordinator | Service that validates operations and commits group/event state. |
 | Group message | One logical send operation (`group_send`) that fanouts into per-member deliveries. |
 | Delivery event | One per-recipient delivery status tracked by coordinator (`queued`, `delivered`, `failed`). |
+| Operation actor DID (`actor_did`) | DID from signed AMP envelope `from` field; authorization and idempotency rules bind to this value. |
 | Thread reference (`thread_ref`) | Optional conversation key copied to delivered AMP `thread_id`. |
 
 ### 2.2 Role Profiles and MTI Requirements
@@ -122,7 +123,7 @@ An implementation is conformant only if it:
 - MUST maintain monotonic `member_rev` and `group_seq`.
 - MUST treat `group_send` commit as source-of-truth even when transport push is delayed.
 - MUST expose deterministic query ordering and pagination behavior.
-- Core MTI baseline is strict actor binding: authenticated caller DID MUST equal operation `actor` DID.
+- Core MTI baseline is strict actor binding: authenticated caller DID MUST equal operation actor DID (`actor_did`, derived from signed envelope `from`).
 
 `Member Delivery Profile`:
 - MUST accept `group_deliver` payloads as coordinator-origin messages.
@@ -193,6 +194,7 @@ With RFC 010:
 MTI rules:
 - A group is identified by `group_id` (`bstr .size 16`).
 - `member_rev` starts at `1` on create and increments by exactly `1` for each membership/role/policy mutation.
+- `group_seq` starts at `0` on create and increments by exactly `1` for each committed group event.
 - Membership statuses are `active` or `removed`.
 - `join_policy` MTI value is `invite_only`; `open` is optional profile.
 
@@ -207,6 +209,7 @@ Roles:
 Authorization MTI:
 - `group_create`: any authenticated caller MAY create; caller becomes `owner`.
 - `member_add`, `member_remove`, `member_role_set`, `group_update`: caller MUST be `owner` or `admin`.
+- Owner-role grant/revoke via `member_role_set` MUST be owner-only.
 - `group_send`: caller MUST be `owner`, `admin`, or `member` and membership status MUST be `active`.
 - `group_state_get`, `group_events_query`: caller MUST be active member unless local policy explicitly permits broader read.
 
@@ -215,7 +218,7 @@ Authorization MTI:
 Ordering rules:
 - Coordinator MUST assign one strictly increasing `group_seq` to every committed group event.
 - `group_events_query` default ordering MUST be ascending by `group_seq`.
-- Same (`sender`, `group_id`, `coord_msg_id`) with identical payload MUST be idempotent success.
+- Same (`actor_did`, `group_id`, `coord_msg_id`) with identical payload MUST be idempotent success.
 - Same key with conflicting payload MUST fail with `4001`.
 
 Fanout rules:
@@ -242,7 +245,7 @@ member-role = "owner" / "admin" / "member" / "observer"
 member-status = "active" / "removed"
 join-policy = "invite_only" / "open"
 delivery-status = "queued" / "delivered" / "failed"
-coord-op =
+coord-request-op =
   "group_create" /
   "member_add" /
   "member_remove" /
@@ -250,8 +253,9 @@ coord-op =
   "group_update" /
   "group_send" /
   "group_state_get" /
-  "group_events_query" /
-  "group_deliver"
+  "group_events_query"
+
+coord-response-op = coord-request-op
 
 coord-session-context = {
   "session_id": session-id,
@@ -270,7 +274,7 @@ coord-group = {
   "owner": did,
   "join_policy": join-policy,
   "member_rev": uint,
-  "event_seq": uint,
+  "group_seq": uint,
   "created_at": unix-ms,
   "updated_at": unix-ms,
   ? "meta": { * tstr => tstr },
@@ -307,12 +311,15 @@ Dispatch rules:
 - Direct coordination profile (MTI in this RFC): requests MUST use `typ = REQUEST`; responses MUST use `typ = RESPONSE` and MUST set envelope `reply_to` to triggering request `id`.
 - Group delivery fanout uses `typ = MESSAGE` with `body.coord_v = 1` and `body.op = "group_deliver"`.
 - CAP-exposed coordination profile (optional): outer dispatch follows RFC 004 (`CAP_INVOKE`/`CAP_RESULT`) while coordination semantics apply to capability payload.
+- Operation actor DID source is signed envelope `from` (`actor_did`) in direct and CAP paths.
+- Coordination request payload MUST NOT define its own actor override field.
 
 Version and operation rules:
 - Supported version is `coord_v = 1`.
 - Unsupported `coord_v` MUST be rejected with `1004`.
 - Unknown `op` values MUST be rejected with `4001`.
 - `body.delegation` on non-CAP coordination messages MUST be rejected with `4001`.
+- `op = "group_deliver"` is coordinator fanout-only and MUST NOT appear in direct `REQUEST/RESPONSE` or `CAP_INVOKE.params`; violation MUST be rejected with `4001`.
 
 ### 5.2 GROUP_CREATE
 
@@ -324,7 +331,7 @@ Request body (`op = "group_create"`) MUST include:
 
 Processing:
 - Authenticated caller DID becomes `owner` and MUST exist in resulting member list as `active`.
-- `member_rev` initialized to `1`; `event_seq` initialized to `0`.
+- `member_rev` initialized to `1`; `group_seq` initialized to `0`.
 - If group already exists, behavior is idempotent only when caller DID and initial normalized state are equivalent; otherwise reject with `4001`.
 
 Response:
@@ -349,6 +356,7 @@ Shared rules:
 `member_role_set`:
 - Changes role for active member.
 - Promoting/removing owner role MUST preserve at least one active owner.
+- Owner-role grant/revoke (`role = "owner"` or demoting an existing owner) MUST be executed only by current owner; admin attempts MUST be rejected with `3001`.
 
 Mutation response:
 - `status = "ok"`
@@ -377,7 +385,7 @@ Rules:
 
 Validation:
 - Caller MUST be active member with send permission.
-- `coord_msg_id` idempotency key is (`caller_did`, `group_id`, `coord_msg_id`).
+- `coord_msg_id` idempotency key is (`actor_did`, `group_id`, `coord_msg_id`).
 - Same key + same normalized payload => idempotent success.
 - Same key + conflicting payload => `4001`.
 
@@ -419,7 +427,8 @@ Fanout envelope rule:
 
 `group_events_query` request fields:
 - `group_id`
-- optional `from_seq` (inclusive, default latest backward window per local policy)
+- optional `from_seq` (inclusive, default `0`)
+- optional `cursor` (opaque)
 - optional `limit` (`1..50`, default `20`)
 - optional `include_payload` (default `false`)
 
@@ -427,6 +436,9 @@ Rules:
 - Caller MUST be active member (MTI).
 - Results MUST be deterministic ordering by `group_seq` ascending.
 - If `include_payload = false`, `payload` field MUST be omitted in event items.
+- `from_seq` and `cursor` MUST NOT be present together.
+- If both `from_seq` and `cursor` are absent, receiver MUST treat query as `from_seq = 0`.
+- If `cursor` is present, requester MUST keep `group_id` and `include_payload` unchanged from original page; `limit` MAY change.
 - Invalid cursor/range/limit MUST be rejected with `4001`.
 
 ### 5.7 Coordination Body CDDL
@@ -434,7 +446,7 @@ Rules:
 ```cddl
 coord-request = {
   "coord_v": 1,
-  "op": coord-op,
+  "op": coord-request-op,
   ? "session": coord-session-context,
   ? "group_id": group-id,
   ? "coord_msg_id": coord-msg-id,
@@ -449,19 +461,22 @@ coord-request = {
   ? "thread_ref": bstr,
   ? "include_self": bool,
   ? "from_seq": uint,
+  ? "cursor": tstr,
   ? "limit": uint,
   ? "include_payload": bool
 }
 
 coord-response = {
   "coord_v": 1,
-  "op": coord-op,
+  "op": coord-response-op,
   "status": "ok" / "accepted" / "error",
   ? "group": coord-group,
   ? "member_rev": uint,
   ? "group_seq": uint,
   ? "recipient_count": uint,
   ? "events": [* coord-event],
+  ? "next_cursor": tstr / null,
+  ? "has_more": bool,
   ? "error": { "code": uint, "message": tstr }
 }
 
@@ -487,12 +502,15 @@ Capability ID:
 
 Rules:
 - `CAP_INVOKE.params` MUST contain exactly one RFC 011 request body with `coord_v = 1`.
+- Allowed CAP request ops are: `group_create`, `member_add`, `member_remove`, `member_role_set`, `group_update`, `group_send`, `group_state_get`, `group_events_query`.
 - `CAP_RESULT.result` MUST carry RFC 011 response body.
 - If `CAP_INVOKE.body.delegation` is present, validation MUST follow RFC 005.
 - Invalid/unsupported delegation evidence MUST map to `3004`.
 - Direct profile `REQUEST`/`RESPONSE` direction rules MUST NOT be applied to CAP envelope types.
 - Session context source-of-truth in CAP path is RFC 004 envelope extension (`CAP_INVOKE.body.session`, `CAP_RESULT.body.session`) with semantics governed by RFC 006.
 - `CAP_INVOKE.params.session` and `CAP_RESULT.result.session` MAY exist for payload-level compatibility, but if both payload and envelope session context are present, they MUST be semantically equivalent; mismatch MUST fail with `4001`.
+- Pre-execution rejection in CAP path MUST return AMP `ERROR` per RFC 004 semantics.
+- Only post-accept execution failures in CAP path MAY return `CAP_RESULT(status="error")`.
 
 ---
 
@@ -540,10 +558,12 @@ Deterministic constraints:
 | Unauthorized actor, non-member send/query, or role violation | `3001` | No |
 | Invalid/unsupported delegation evidence in CAP coordination path (`CAP_INVOKE.body.delegation`) | `3004` | No |
 | `body.delegation` present on non-CAP coordination message | `4001` | No |
+| `group_deliver` appears on non-fanout request path (`REQUEST`/`RESPONSE`/`CAP_INVOKE.params`) | `4001` | No |
 | Invalid `op`/`typ` direction or `reply_to` correlation | `4001` | No |
 | Invalid field ranges (`limit`, malformed `group_id`/`coord_msg_id`, bad policy) | `4001` | No |
 | Duplicate idempotency key with conflicting payload | `4001` | No |
 | `if_member_rev` mismatch or invalid mutation transition | `4001` | No |
+| `group_events_query` carries both `from_seq` and `cursor` | `4001` | No |
 | Invalid/expired query cursor or context mismatch | `4001` | No |
 | Unsupported `coord_v` | `1004` | No |
 | Invalid CBOR/message shape | `1001` | No |
@@ -602,7 +622,7 @@ Required controls:
 - Implement `coord_v = 1` parsing and op dispatch.
 - Enforce direct profile direction rules (`REQUEST/RESPONSE`) and `group_deliver` (`MESSAGE`).
 - Enforce strict role checks and member-state transitions.
-- Enforce idempotency key (`sender`, `group_id`, `coord_msg_id`) semantics.
+- Enforce idempotency key (`actor_did`, `group_id`, `coord_msg_id`) semantics.
 - Implement monotonic `member_rev` and `group_seq` assignment.
 - Implement deterministic event query ordering and pagination.
 - Implement CAP mapping (`org.agentries.coordination.workflow:1.0.0`) and delegation error mapping (`3004`).
@@ -622,6 +642,8 @@ Required controls:
 - RFC 006: Session Protocol (State + Recovery)
 - RFC 2119: Key words for use in RFCs to Indicate Requirement Levels
 - RFC 8174: Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words
+- RFC 8949: CBOR
+- RFC 8610: CDDL
 
 ### 12.2 Informative References
 
@@ -669,7 +691,7 @@ Expected:
 ### A.5 GROUP_SEND Duplicate Idempotent Positive
 
 Input:
-- Retry same (`sender`, `group_id`, `coord_msg_id`) with identical normalized payload.
+- Retry same (`actor_did`, `group_id`, `coord_msg_id`) with identical normalized payload.
 
 Expected:
 - Deterministic idempotent success; same logical result.
@@ -754,6 +776,38 @@ Input:
 Expected:
 - Reject with `1001 INVALID_MESSAGE` per RFC 006 parsing rules.
 
+### A.15 GROUP_DELIVER Wrong Direction Negative
+
+Input:
+- Direct `REQUEST` or `CAP_INVOKE.params` carries `op = "group_deliver"`.
+
+Expected:
+- Reject with `4001 BAD_REQUEST`.
+
+### A.16 MEMBER_ROLE_SET Owner Mutation by Admin Negative
+
+Input:
+- Active `admin` attempts owner-role grant/revoke through `member_role_set`.
+
+Expected:
+- Reject with `3001 UNAUTHORIZED`.
+
+### A.17 GROUP_EVENTS_QUERY Cursor and from_seq Conflict Negative
+
+Input:
+- `group_events_query` includes both `cursor` and `from_seq`.
+
+Expected:
+- Reject with `4001 BAD_REQUEST`.
+
+### A.18 Actor Binding Mismatch Negative
+
+Input:
+- Transport-authenticated principal DID differs from signed envelope `from` DID for a coordination mutation request.
+
+Expected:
+- Reject with `3001 UNAUTHORIZED`.
+
 ---
 
 ## Appendix B. Open Questions
@@ -768,3 +822,5 @@ No open questions in this revision.
 |------|---------|--------|---------|
 | 2026-02-06 | Proposal | TBD | Initial outline for multi-agent coordination and group messaging concepts |
 | 2026-02-08 | 0.1 | Nowa | Rewrote RFC 011 into normative draft structure with conformance profiles, boundary contracts, deterministic coordination semantics, CDDL schemas, CAP interop mapping, error mapping, and minimal test vectors |
+| 2026-02-08 | 0.2 | Nowa | Fixed `group_seq` naming consistency, restricted `group_deliver` to coordinator fanout path, clarified actor binding source (`envelope.from`) and idempotency key, constrained admin owner-role mutation rules, and completed `group_events_query` cursor model with CDDL/error/vector coverage |
+| 2026-02-08 | 0.3 | Nowa | Made `group_events_query` default window deterministic (`from_seq=0`), aligned CAP error-channel behavior with RFC 004 (`ERROR` pre-exec, `CAP_RESULT(status=\"error\")` post-accept), normalized A.5 idempotency terminology to `actor_did`, and added CBOR/CDDL normative references |

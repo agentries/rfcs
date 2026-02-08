@@ -12,7 +12,8 @@
   "optional_extension_rfcs": [
     { "id": "007", "version": "0.34" },
     { "id": "008", "version": "0.4" },
-    { "id": "009", "version": "0.11" }
+    { "id": "009", "version": "0.11" },
+    { "id": "010", "version": "0.5" }
   ],
   "profiles": [
     {
@@ -21,9 +22,9 @@
       "description": "Default AMP Full gate profile for RFC 001-006 baseline."
     },
     {
-      "id": "amp-full-stack-001-009",
+      "id": "amp-full-stack-001-010",
       "required_field": "required_vectors_full_stack",
-      "description": "Full-stack gate profile that extends core gate with selected RFC 007-009 vectors."
+      "description": "Full-stack gate profile that extends core gate with selected RFC 007-010 vectors."
     }
   ],
   "required_vectors": [
@@ -95,7 +96,12 @@
     "009:A.23",
     "009:A.24",
     "009:A.25",
-    "009:A.26"
+    "009:A.26",
+    "010:A.6",
+    "010:A.9",
+    "010:A.12",
+    "010:A.16",
+    "010:A.17"
   ],
   "optional_vectors": [
     "001:A.1",
@@ -139,7 +145,25 @@
     "009:A.23",
     "009:A.24",
     "009:A.25",
-    "009:A.26"
+    "009:A.26",
+    "010:A.1",
+    "010:A.2",
+    "010:A.3",
+    "010:A.4",
+    "010:A.5",
+    "010:A.6",
+    "010:A.7",
+    "010:A.8",
+    "010:A.9",
+    "010:A.10",
+    "010:A.11",
+    "010:A.12",
+    "010:A.13",
+    "010:A.14",
+    "010:A.15",
+    "010:A.16",
+    "010:A.17",
+    "010:A.18"
   ],
   "optional_vector_groups": [
     "001:full-profile vectors",
@@ -148,6 +172,7 @@
     "006:independent thread profile vectors",
     "007:CAP path vectors",
     "008:discovery/contact/presence profile vectors",
-    "009:reputation profile vectors"
+    "009:reputation profile vectors",
+    "010:telemetry/evaluation profile vectors"
   ]
 }

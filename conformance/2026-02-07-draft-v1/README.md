@@ -6,14 +6,14 @@ This directory is the canonical artifact set for the draft interoperability suit
 
 - Target stage: Draft interoperability baseline.
 - Referenced RFCs (core/full gate baseline): 001-006.
-- Optional extension RFCs: 007, 008, 009.
+- Optional extension RFCs: 007, 008, 009, 010.
 - Profiles:
   - `amp-full-core-001-006` (default): required gate vectors from RFC 001-006.
-  - `amp-full-stack-001-009`: required gate vectors from RFC 001-006 plus selected RFC 007-009 vectors.
+  - `amp-full-stack-001-010`: required gate vectors from RFC 001-006 plus selected RFC 007-010 vectors.
 - Vector source: Appendix A vectors in each RFC, selected for cross-implementation determinism.
 - `required_vectors` defines the `amp-full-core-001-006` gate set for this draft baseline.
-- `required_vectors_full_stack` defines the `amp-full-stack-001-009` gate set for this draft baseline.
-- `optional_vectors` carries extension/profile vectors (including RFC 007, RFC 008, RFC 009, and optional profile vectors from RFC 002/003/006) and fixture-only entries.
+- `required_vectors_full_stack` defines the `amp-full-stack-001-010` gate set for this draft baseline.
+- `optional_vectors` carries extension/profile vectors (including RFC 007, RFC 008, RFC 009, RFC 010, and optional profile vectors from RFC 002/003/006) and fixture-only entries.
 - Every required vector in the selected profile MUST appear in the report with status `pass` or `fail` (not `skip`).
 - `skip` is only valid for `optional_vectors`.
 
@@ -32,7 +32,7 @@ Use `interop-report.template.json` as a starter for the default `amp-full-core-0
 Validation steps:
 - Structural check (JSON Schema): use your preferred validator against `interop-report.schema.json`.
 - Semantic check for default profile: `./validate-report.sh ./interop-report.json`.
-- Semantic check for full-stack profile: `./validate-report.sh ./interop-report.json ./vector-set.json amp-full-stack-001-009`.
+- Semantic check for full-stack profile: `./validate-report.sh ./interop-report.json ./vector-set.json amp-full-stack-001-010`.
 
 Required report fields are aligned with RFC 001 Section 1.5.2:
 - implementation identifier and version

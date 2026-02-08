@@ -34,8 +34,8 @@ Note: **Accepted** indicates implementation-ready specifications (byte-accurate 
 | 007 | [Agent Payment Protocol](007-agent-payment-protocol.md) | Draft v0.34 (CAP precedence + session source-of-truth + split descriptor failure vectors + byte checks) | Ryan Cooper, Nowa | 2026-02-07 |
 | 008 | [Agent Discovery & Directory](008-agent-discovery-directory.md) | Draft v0.4 | Nowa | 2026-02-07 |
 | 009 | [Reputation & Trust Signals](009-reputation-trust-signals.md) | Draft v0.11 (session/CAP negative vectors + 3004 byte-level checks) | Nowa | 2026-02-07 |
-| 010 | [Observability & Evaluation Telemetry](010-observability-evaluation-telemetry.md) | Draft v0.1 | Nowa | 2026-02-08 |
-| 011 | [Multi-Agent Coordination & Group Messaging](011-multi-agent-coordination.md) | Draft v0.1 | Nowa | 2026-02-08 |
+| 010 | [Observability & Evaluation Telemetry](010-observability-evaluation-telemetry.md) | Draft v0.5 | Nowa | 2026-02-08 |
+| 011 | [Multi-Agent Coordination & Group Messaging](011-multi-agent-coordination.md) | Draft v0.3 | Nowa | 2026-02-08 |
 
 ## Supporting Documents
 

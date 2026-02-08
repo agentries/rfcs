@@ -70,6 +70,11 @@
     { "vector_id": "009:A.23", "status": "skip", "notes": "Optional extension RFC 009 not implemented in this run" },
     { "vector_id": "009:A.24", "status": "skip", "notes": "Optional extension RFC 009 not implemented in this run" },
     { "vector_id": "009:A.25", "status": "skip", "notes": "Optional extension RFC 009 not implemented in this run" },
-    { "vector_id": "009:A.26", "status": "skip", "notes": "Optional extension RFC 009 not implemented in this run" }
+    { "vector_id": "009:A.26", "status": "skip", "notes": "Optional extension RFC 009 not implemented in this run" },
+    { "vector_id": "010:A.6", "status": "skip", "notes": "Optional extension RFC 010 not implemented in this run" },
+    { "vector_id": "010:A.9", "status": "skip", "notes": "Optional extension RFC 010 not implemented in this run" },
+    { "vector_id": "010:A.12", "status": "skip", "notes": "Optional extension RFC 010 not implemented in this run" },
+    { "vector_id": "010:A.16", "status": "skip", "notes": "Optional extension RFC 010 not implemented in this run" },
+    { "vector_id": "010:A.17", "status": "skip", "notes": "Optional extension RFC 010 not implemented in this run" }
   ]
 }

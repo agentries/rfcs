@@ -4,7 +4,7 @@
 **Authors**: Nowa
 **Created**: 2026-02-06
 **Updated**: 2026-02-08
-**Version**: 0.1
+**Version**: 0.5
 
 ---
 
@@ -22,6 +22,7 @@
 - RFC 007: Agent Payment Protocol (payment outcomes as telemetry sources)
 - RFC 008: Agent Discovery & Directory (telemetry endpoint hint discovery)
 - RFC 009: Reputation & Trust Signals (telemetry-derived trust inputs)
+- RFC 011: Multi-Agent Coordination & Group Messaging (coordination-derived telemetry sources)
 
 ---
 
@@ -117,7 +118,9 @@ An implementation is conformant only if it:
 - MUST enforce reporter identity binding and validation rules.
 - MUST implement deterministic rollups in Section 5.6.
 - MUST expose query/rollup responses with deterministic ordering and errors.
-- Core MTI baseline is strict reporter binding: authenticated caller DID MUST equal `event.reporter` for submit operations.
+- Core MTI baseline is strict reporter binding:
+  - for `telemetry_submit`, authenticated caller DID MUST equal `event.reporter`;
+  - for `eval_submit`, authenticated caller DID MUST equal `evaluation.reporter`.
 
 `Telemetry Consumer Profile`:
 - MUST treat telemetry as observability input, not authorization proof.
@@ -175,6 +178,10 @@ With RFC 009:
 - Reputation engines MAY consume telemetry as one input source.
 - Telemetry success/failure signals MUST NOT bypass RFC 009 dispute/review policies.
 
+With RFC 011:
+- Multi-agent coordination outcomes MAY be source telemetry signals.
+- Coordination state mutation MUST remain governed by RFC 011 and MUST NOT be driven by telemetry queries/results.
+
 ---
 
 ## 4. Telemetry Data Model
@@ -204,7 +211,8 @@ session-id = bstr .size 16
 
 privacy-class = "internal" / "partner" / "public"
 rollup-interval = "1m" / "5m" / "1h" / "1d"
-query-view = "self" / "public"
+raw-query-view = tstr
+rollup-query-view = "self" / "public"
 
 telemetry-session-context = {
   "session_id": session-id,
@@ -299,9 +307,11 @@ Rules:
 Rules:
 - Query filters MAY include `subject`, optional `event_type`, optional `category`, optional pagination.
 - `view` defaults to `"self"` when absent.
+- If `view` is present and not `"self"`, request MUST be rejected with `4001`.
+- Non-`"self"` `view` on telemetry raw query is a semantic validation failure and MUST map to `4001` (not parse-level `1001`).
 - MTI raw-event query authorization: authenticated caller DID MUST equal query `subject`; otherwise reject with `3001`.
 - `limit` default is `50` when absent and MUST be in `1..100` when present.
-- Result ordering MUST be deterministic: `occurred_at` descending, then `event_id` lexical ascending.
+- Result ordering MUST be deterministic: `occurred_at` descending, then `event_id` ascending by raw byte-string lexical order (unsigned byte-wise compare).
 - `cursor` MUST be treated as opaque by clients.
 - If `cursor` is present, requester MUST keep `subject`, `event_type`, and `category` unchanged from original query page; `limit` MAY change.
 - Invalid/expired cursor, or cursor/query-context mismatch, MUST be rejected with `4001`.
@@ -310,9 +320,11 @@ Rules:
 
 Rules:
 - `rollup_query` requires `subject`, `event_type`, `interval`, `window_start`, and `window_end`.
+- `view` defaults to `"self"` when absent.
 - `window_end` MUST be greater than `window_start`; otherwise reject with `4001`.
 - (`window_end - window_start`) MUST be `<= 7776000000` (90 days).
 - `window_start` and `window_end` MUST align to interval boundaries (Section 5.6) or reject with `4001`.
+- Computed bucket count `((window_end - window_start) / interval_ms)` MUST be in `1..10000`; otherwise reject with `4001`.
 - `view="self"` requires authenticated caller DID == query `subject`.
 - `view="public"` is optional profile; if unsupported or unauthorized by policy, reject with `3001`.
 
@@ -320,6 +332,7 @@ Rules:
 
 `eval_submit` rules:
 - Core MTI behavior: authenticated caller DID MUST equal `evaluation.reporter`.
+- `evaluation.subject` and `evaluation.reporter` MUST be valid DID strings.
 - `score` MUST be in `0..100`; out-of-range MUST be rejected with `4001`.
 - `executed_at` MUST NOT exceed `server_now + 300000`.
 - Idempotency key is (`reporter`, `eval_id`) with conflict behavior from Section 4.4.
@@ -327,7 +340,7 @@ Rules:
 `eval_query` rules:
 - MTI query authorization: authenticated caller DID MUST equal query `subject`; otherwise reject with `3001`.
 - `limit` default is `20` and MUST be in `1..100` when present.
-- Result ordering MUST be deterministic: `executed_at` descending, then `eval_id` lexical ascending.
+- Result ordering MUST be deterministic: `executed_at` descending, then `eval_id` ascending by raw byte-string lexical order (unsigned byte-wise compare).
 
 ### 5.6 Deterministic Bucketing and Aggregation
 
@@ -383,7 +396,7 @@ telemetry-query-body = {
   ? "category": "transport" / "execution" / "capability" / "payment" / "policy" / "quality",
   ? "cursor": tstr,
   ? "limit": uint,
-  ? "view": query-view,
+  ? "view": raw-query-view,
   ? "session": telemetry-session-context
 }
 
@@ -405,7 +418,7 @@ rollup-query-body = {
   "interval": rollup-interval,
   "window_start": unix-ms,
   "window_end": unix-ms,
-  ? "view": query-view,
+  ? "view": rollup-query-view,
   ? "session": telemetry-session-context
 }
 
@@ -553,16 +566,21 @@ Deterministic mapping:
 | `body.delegation` present on non-CAP telemetry message | `4001` | No |
 | Invalid `op`/`typ` direction or `reply_to` correlation | `4001` | No |
 | Invalid event/eval field ranges or timestamp constraints | `4001` | No |
+| `telemetry_query.view` present and not `"self"` | `4001` | No |
+| `rollup_query` bucket count outside `1..10000` | `4001` | No |
 | Invalid rollup window/interval alignment | `4001` | No |
 | Invalid/expired cursor or cursor/query-context mismatch | `4001` | No |
 | Duplicate key with conflicting payload | `4001` | No |
-| Subject DID resolution failure (when required by policy) | `2001` | Maybe |
 | Telemetry store unavailable | `5002` | Yes |
 | Internal telemetry engine failure | `5001` | Yes |
 
 Retry guidance:
 - `5002` and `5001` MAY be retried with bounded backoff.
 - `100x/3001/3004/4001` SHOULD NOT be retried without payload/policy changes.
+
+Optional profile note:
+- Implementations MAY perform a pre-query subject DID existence check and return `2001 RECIPIENT_NOT_FOUND` when that optional profile is enabled.
+- This optional profile SHOULD be disabled by default and SHOULD be enabled only in trusted deployments where subject-existence disclosure is acceptable.
 
 ---
 
@@ -636,6 +654,7 @@ Compatibility rules:
 - RFC 007: Agent Payment Protocol
 - RFC 008: Agent Discovery & Directory
 - RFC 009: Reputation & Trust Signals
+- RFC 011: Multi-Agent Coordination & Group Messaging
 - DID Core (W3C Recommendation)
 
 ---
@@ -762,6 +781,38 @@ Input:
 Expected:
 - Reject with `4001 BAD_REQUEST`.
 
+### A.15 TELEMETRY_QUERY Invalid View Negative
+
+Input:
+- `telemetry_query.view = "public"` on direct raw-event query path.
+
+Expected:
+- Reject with `4001 BAD_REQUEST`.
+
+### A.16 CAP Session Context Mismatch Negative
+
+Input:
+- CAP path request includes both `CAP_INVOKE.body.session` and `CAP_INVOKE.params.session` with semantically inconsistent values.
+
+Expected:
+- Reject with `4001 BAD_REQUEST`.
+
+### A.17 ROLLUP_QUERY Excessive Bucket Count Negative
+
+Input:
+- `rollup_query` uses aligned window/interval that computes more than `10000` buckets.
+
+Expected:
+- Reject with `4001 BAD_REQUEST`.
+
+### A.18 EVAL_SUBMIT Invalid DID Negative
+
+Input:
+- `eval_submit.evaluation.subject` or `eval_submit.evaluation.reporter` is not a valid DID string.
+
+Expected:
+- Reject with `4001 BAD_REQUEST`.
+
 ---
 
 ## Appendix B. Open Questions
@@ -776,3 +827,7 @@ No open questions in this revision.
 |------|---------|--------|---------|
 | 2026-02-06 | Proposal | TBD | Initial outline for telemetry and evaluation concepts |
 | 2026-02-08 | 0.1 | Nowa | Rewrote RFC 010 into normative draft structure with conformance profiles, boundary contracts, deterministic telemetry/evaluation semantics, CDDL schemas, CAP interop mapping, error mapping, and minimal test vectors |
+| 2026-02-08 | 0.2 | Nowa | Added RFC 011 boundary alignment, split raw-event vs rollup `view` model, made query ordering byte-lex explicit for `event_id`/`eval_id`, removed non-deterministic `2001` from MTI mapping, and added vectors A.15-A.16 |
+| 2026-02-08 | 0.3 | Nowa | Added `rollup_query` default `view=self`, added deterministic bucket-count upper bound (`1..10000`), required DID validity checks for `eval_submit.subject/reporter`, and added vectors A.17-A.18 |
+| 2026-02-08 | 0.4 | Nowa | Aligned header/version state with changelog and README, resolved `telemetry_query.view` CDDL-vs-error mapping conflict by making non-`self` a deterministic semantic `4001`, and tightened optional `2001` profile guidance to default-off trusted deployments |
+| 2026-02-08 | 0.5 | Nowa | Clarified MTI reporter-binding conformance language so submit binding explicitly covers both `telemetry_submit.event.reporter` and `eval_submit.evaluation.reporter` |
