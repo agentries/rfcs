@@ -2,7 +2,7 @@
   "suite_version": "2026-02-07-draft-v1",
   "status": "draft",
   "referenced_rfcs": [
-    { "id": "001", "version": "0.43" },
+    { "id": "001", "version": "0.44" },
     { "id": "002", "version": "0.16" },
     { "id": "003", "version": "0.61" },
     { "id": "004", "version": "0.12" },
@@ -13,7 +13,8 @@
     { "id": "007", "version": "0.34" },
     { "id": "008", "version": "0.4" },
     { "id": "009", "version": "0.11" },
-    { "id": "010", "version": "0.5" }
+    { "id": "010", "version": "0.5" },
+    { "id": "011", "version": "0.6" }
   ],
   "profiles": [
     {
@@ -22,9 +23,9 @@
       "description": "Default AMP Full gate profile for RFC 001-006 baseline."
     },
     {
-      "id": "amp-full-stack-001-010",
+      "id": "amp-full-stack-001-011",
       "required_field": "required_vectors_full_stack",
-      "description": "Full-stack gate profile that extends core gate with selected RFC 007-010 vectors."
+      "description": "Full-stack gate profile that extends core gate with selected RFC 007-011 vectors."
     }
   ],
   "required_vectors": [
@@ -101,7 +102,15 @@
     "010:A.9",
     "010:A.12",
     "010:A.16",
-    "010:A.17"
+    "010:A.17",
+    "011:A.10",
+    "011:A.15",
+    "011:A.16",
+    "011:A.17",
+    "011:A.18",
+    "011:A.21",
+    "011:A.22",
+    "011:A.23"
   ],
   "optional_vectors": [
     "001:A.1",
@@ -163,7 +172,17 @@
     "010:A.15",
     "010:A.16",
     "010:A.17",
-    "010:A.18"
+    "010:A.18",
+    "011:A.10",
+    "011:A.15",
+    "011:A.16",
+    "011:A.17",
+    "011:A.18",
+    "011:A.19",
+    "011:A.20",
+    "011:A.21",
+    "011:A.22",
+    "011:A.23"
   ],
   "optional_vector_groups": [
     "001:full-profile vectors",
@@ -173,6 +192,7 @@
     "007:CAP path vectors",
     "008:discovery/contact/presence profile vectors",
     "009:reputation profile vectors",
-    "010:telemetry/evaluation profile vectors"
+    "010:telemetry/evaluation profile vectors",
+    "011:coordination profile vectors"
   ]
 }

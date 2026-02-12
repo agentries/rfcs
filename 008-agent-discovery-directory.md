@@ -3,7 +3,7 @@
 **Status**: Draft
 **Authors**: Nowa
 **Created**: 2026-02-06
-**Updated**: 2026-02-07
+**Updated**: 2026-02-10
 **Version**: 0.4
 
 ---
@@ -711,8 +711,9 @@ No open questions in this revision.
 
 | Date | Version | Author | Changes |
 |------|---------|--------|---------|
-| 2026-02-06 | Proposal | TBD | Initial outline for discovery and directory concepts |
+| 2026-02-06 | Proposal | Nowa | Initial outline for discovery and directory concepts |
 | 2026-02-07 | 0.1 | Nowa | Rewrote RFC 008 into normative draft format with conformance profiles, cross-RFC boundary contracts, deterministic discovery/contact/presence semantics, CDDL, error mapping, and minimal test vectors |
 | 2026-02-07 | 0.2 | Nowa | Fixed deterministic endpoint tie-break ordering, formalized contact/presence direction and correlation rules, defined pending/expiry semantics, and added byte-level error-code checks |
 | 2026-02-07 | 0.3 | Nowa | Aligned endpoint selection priority with RFC 002 (`transport` first), prohibited index-only endpoint injection, tightened `1005` usage boundaries, and made invalid federation metadata mapping deterministic (`4001`) |
 | 2026-02-07 | 0.4 | Nowa | Added explicit Section 8 error mapping for invalid `relayCapabilities` metadata and synchronized optional conformance vector coverage for RFC 008 |
+| 2026-02-10 | 0.4 | Nowa | Synchronized document metadata (`Updated`) and repository gate-status references for audit consistency |

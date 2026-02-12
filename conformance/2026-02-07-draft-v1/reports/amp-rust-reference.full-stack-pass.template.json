@@ -1,0 +1,275 @@
+{
+  "suite_version": "2026-02-07-draft-v1",
+  "implementation": {
+    "id": "amp-rust-reference",
+    "version": "0.0.0-template",
+    "repository": "https://example.invalid/replace",
+    "commit": "replace-with-commit"
+  },
+  "run": {
+    "executed_at": "1970-01-01T00:00:00Z",
+    "environment": {
+      "os": "replace",
+      "arch": "replace",
+      "runtime": "replace",
+      "notes": "template: set pass/fail using real run evidence"
+    }
+  },
+  "results": [
+    {
+      "vector_id": "001:A.2",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "001:A.3",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "001:A.5",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "001:A.6",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "001:A.8",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "001:A.9",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "001:A.10",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "001:A.11",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "002:A.1",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "002:A.2",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "002:A.4",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "002:A.6",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "002:A.13",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "002:A.14",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "003:A.1",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "003:A.2",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "003:A.3",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "004:A.2",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "004:A.18",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "004:A.19",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "004:A.15",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "004:A.23",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "005:A.4",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "005:A.14",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "005:A.20",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "006:A.2",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "006:A.3",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "006:A.4",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "006:A.17",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "007:A.18",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "007:A.21",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "008:A.4",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "008:A.8",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "008:A.9",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "009:A.23",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "009:A.24",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "009:A.25",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "009:A.26",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "010:A.6",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "010:A.9",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "010:A.12",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "010:A.16",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "010:A.17",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "011:A.10",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "011:A.15",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "011:A.16",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "011:A.17",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "011:A.18",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "011:A.21",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "011:A.22",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    },
+    {
+      "vector_id": "011:A.23",
+      "status": "fail",
+      "notes": "template placeholder: update to pass/fail from real execution"
+    }
+  ]
+}

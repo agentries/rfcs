@@ -3,7 +3,7 @@
 **Status**: Draft
 **Authors**: Nowa
 **Created**: 2026-02-06
-**Updated**: 2026-02-08
+**Updated**: 2026-02-10
 **Version**: 0.5
 
 ---
@@ -825,9 +825,10 @@ No open questions in this revision.
 
 | Date | Version | Author | Changes |
 |------|---------|--------|---------|
-| 2026-02-06 | Proposal | TBD | Initial outline for telemetry and evaluation concepts |
+| 2026-02-06 | Proposal | Nowa | Initial outline for telemetry and evaluation concepts |
 | 2026-02-08 | 0.1 | Nowa | Rewrote RFC 010 into normative draft structure with conformance profiles, boundary contracts, deterministic telemetry/evaluation semantics, CDDL schemas, CAP interop mapping, error mapping, and minimal test vectors |
 | 2026-02-08 | 0.2 | Nowa | Added RFC 011 boundary alignment, split raw-event vs rollup `view` model, made query ordering byte-lex explicit for `event_id`/`eval_id`, removed non-deterministic `2001` from MTI mapping, and added vectors A.15-A.16 |
 | 2026-02-08 | 0.3 | Nowa | Added `rollup_query` default `view=self`, added deterministic bucket-count upper bound (`1..10000`), required DID validity checks for `eval_submit.subject/reporter`, and added vectors A.17-A.18 |
 | 2026-02-08 | 0.4 | Nowa | Aligned header/version state with changelog and README, resolved `telemetry_query.view` CDDL-vs-error mapping conflict by making non-`self` a deterministic semantic `4001`, and tightened optional `2001` profile guidance to default-off trusted deployments |
 | 2026-02-08 | 0.5 | Nowa | Clarified MTI reporter-binding conformance language so submit binding explicitly covers both `telemetry_submit.event.reporter` and `eval_submit.evaluation.reporter` |
+| 2026-02-10 | 0.5 | Nowa | Synchronized document metadata (`Updated`) and repository gate-status references for audit consistency |

@@ -1,0 +1,246 @@
+{
+  "suite_version": "2026-02-07-draft-v1",
+  "implementation": {
+    "id": "amp-rust-reference",
+    "version": "0.1.0",
+    "repository": "https://example.invalid/amp-rust-reference",
+    "commit": "draft-2026-02-10-full-stack-precheck"
+  },
+  "run": {
+    "executed_at": "2026-02-10T12:30:00Z",
+    "environment": {
+      "os": "macos-15",
+      "arch": "arm64",
+      "runtime": "rust-1.85.0",
+      "notes": "draft full-stack precheck; extension vectors not yet fully implemented"
+    }
+  },
+  "results": [
+    {
+      "vector_id": "001:A.2",
+      "status": "pass"
+    },
+    {
+      "vector_id": "001:A.3",
+      "status": "pass"
+    },
+    {
+      "vector_id": "001:A.5",
+      "status": "pass"
+    },
+    {
+      "vector_id": "001:A.6",
+      "status": "pass"
+    },
+    {
+      "vector_id": "001:A.8",
+      "status": "pass"
+    },
+    {
+      "vector_id": "001:A.9",
+      "status": "pass"
+    },
+    {
+      "vector_id": "001:A.10",
+      "status": "pass"
+    },
+    {
+      "vector_id": "001:A.11",
+      "status": "pass"
+    },
+    {
+      "vector_id": "002:A.1",
+      "status": "pass"
+    },
+    {
+      "vector_id": "002:A.2",
+      "status": "pass"
+    },
+    {
+      "vector_id": "002:A.4",
+      "status": "pass"
+    },
+    {
+      "vector_id": "002:A.6",
+      "status": "pass"
+    },
+    {
+      "vector_id": "002:A.13",
+      "status": "pass"
+    },
+    {
+      "vector_id": "002:A.14",
+      "status": "pass"
+    },
+    {
+      "vector_id": "003:A.1",
+      "status": "pass"
+    },
+    {
+      "vector_id": "003:A.2",
+      "status": "pass"
+    },
+    {
+      "vector_id": "003:A.3",
+      "status": "pass"
+    },
+    {
+      "vector_id": "004:A.2",
+      "status": "pass"
+    },
+    {
+      "vector_id": "004:A.18",
+      "status": "pass"
+    },
+    {
+      "vector_id": "004:A.19",
+      "status": "pass"
+    },
+    {
+      "vector_id": "004:A.15",
+      "status": "pass"
+    },
+    {
+      "vector_id": "004:A.23",
+      "status": "pass"
+    },
+    {
+      "vector_id": "005:A.4",
+      "status": "pass"
+    },
+    {
+      "vector_id": "005:A.14",
+      "status": "pass"
+    },
+    {
+      "vector_id": "005:A.20",
+      "status": "pass"
+    },
+    {
+      "vector_id": "006:A.2",
+      "status": "pass"
+    },
+    {
+      "vector_id": "006:A.3",
+      "status": "pass"
+    },
+    {
+      "vector_id": "006:A.4",
+      "status": "pass"
+    },
+    {
+      "vector_id": "006:A.17",
+      "status": "pass"
+    },
+    {
+      "vector_id": "007:A.18",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "007:A.21",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "008:A.4",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "008:A.8",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "008:A.9",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "009:A.23",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "009:A.24",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "009:A.25",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "009:A.26",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "010:A.6",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "010:A.9",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "010:A.12",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "010:A.16",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "010:A.17",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "011:A.10",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "011:A.15",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "011:A.16",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "011:A.17",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "011:A.18",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "011:A.21",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "011:A.22",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    },
+    {
+      "vector_id": "011:A.23",
+      "status": "fail",
+      "notes": "Not yet implemented in this draft run"
+    }
+  ]
+}

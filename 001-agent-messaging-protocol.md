@@ -3,8 +3,8 @@
 **Status**: Draft  
 **Authors**: Ryan Cooper, Jason Apple Huang  
 **Created**: 2026-02-04  
-**Updated**: 2026-02-07  
-**Version**: 0.43
+**Updated**: 2026-02-10  
+**Version**: 0.44
 
 ---
 
@@ -136,8 +136,8 @@ Status transition requirement for `AMP Full`:
 - Certification artifacts SHOULD include versioned test reports and reproducible vector references.
 - The conformance suite MUST publish a versioned vector set identifier, referenced RFC versions, and profile-specific required-vector definitions used for evaluation.
 - `amp-full-core-001-006` is the default `AMP Full` gate profile in this revision.
-- `amp-full-stack-001-009` is an additional full-stack profile that promotes selected RFC 007/008/009 vectors to required.
-- For `amp-full-core-001-006`, RFC 007/008/009 remain optional extensions and are not required for gate pass.
+- `amp-full-stack-001-011` is an additional full-stack profile that promotes selected RFC 007/008/009/010/011 vectors to required.
+- For `amp-full-core-001-006`, RFC 007/008/009/010/011 remain optional extensions and are not required for gate pass.
 - The canonical suite artifact set MUST be published in the AMP specification repository under a stable versioned location (for example `conformance/<suite_version>/`).
 - Each candidate implementation MUST publish a machine-readable report (for example `interop-report.json`) including at least:
   - implementation identifier and version;
@@ -147,6 +147,17 @@ Status transition requirement for `AMP Full`:
 - Acceptance decision MUST be based on required-vector pass results only; optional profile vectors MUST be reported separately.
 - Required vectors MUST NOT be reported as `skip`; each required vector MUST have an explicit `pass` or `fail` result.
 - Conformance suite governance MUST be maintained by AMP editors, and suite-breaking changes MUST follow the RFC change-control process.
+
+Stage note:
+- This RFC revision is `Draft` and does not claim `Accepted/Implementation-Ready` gate completion.
+- For RFC 001-011 design-review in this cycle, requirement satisfaction is evaluated against `Draft` gate (not accepted gate).
+- Current-cycle design-requirement verdict is tracked in `conformance/2026-02-07-draft-v1/GATE-STATUS.md`.
+- Draft gate for this revision requires:
+  - at least one `amp-full-core-001-006` report where all required core vectors are `pass`;
+  - at least one `amp-full-stack-001-011` precheck report where all required full-stack vectors are explicitly reported as `pass` or `fail` (no `skip`).
+- Current-cycle design-requirement completion MUST be evaluated by `conformance/2026-02-07-draft-v1/validate-design-requirements.sh`.
+- The accepted gate criteria above are transition criteria for status advancement and are not a failure condition for `Draft` status by themselves.
+- Therefore, for this cycle, `Accepted gate = NOT SATISFIED` is expected and is not treated as a design defect for RFC 001-011.
 
 ### 1.6 Terminology
 
@@ -1890,7 +1901,7 @@ Expected:
 | Capability semantics | RFC004 A.2/A.15/A.18/A.19/A.23 | RFC 004 |
 | Provisional responses | RFC006 A.3/A.4 + session vectors | RFC 006 |
 | Discovery/presence/contact (optional extension) | RFC008 discovery vectors | RFC 008 (optional) |
-| Payment/discovery/reputation (full-stack profile) | RFC007 A.18/A.21 + RFC008 A.4/A.8/A.9 + RFC009 A.23/A.24/A.25/A.26 | RFC 007/008/009 |
+| Payment/discovery/reputation/telemetry/coordination (full-stack profile) | RFC007 A.18/A.21 + RFC008 A.4/A.8/A.9 + RFC009 A.23/A.24/A.25/A.26 + RFC010 A.6/A.9/A.12/A.16/A.17 + RFC011 A.10/A.15/A.16/A.17/A.18/A.21/A.22/A.23 | RFC 007/008/009/010/011 |
 
 ---
 
@@ -1958,3 +1969,4 @@ Versioning note: public version numbers were reset on 2026-02-06 for external pu
 | 2026-02-07 | 0.41 | 5.30 | Nowa | Expanded interop certification gate into executable requirements: versioned vector set references, required report fields, and acceptance decision basis |
 | 2026-02-07 | 0.42 | 5.31 | Nowa | Added conformance suite publication location and governance requirements for Accepted/Implementation-Ready gate auditability |
 | 2026-02-07 | 0.43 | 5.32 | Nowa | Added batch and document MIME test vectors (`A.10`/`A.11`) to close R10/R19 gate coverage, added optional MIME diversity vector (`A.12`), and updated Full coverage matrix mapping |
+| 2026-02-10 | 0.44 | 5.33 | Nowa | Aligned interop gate profile naming to `amp-full-stack-001-011`, synchronized optional-extension scope to RFC 007-011, and updated full-stack coverage matrix vectors accordingly |

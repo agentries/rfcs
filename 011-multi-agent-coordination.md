@@ -3,8 +3,8 @@
 **Status**: Draft
 **Authors**: Nowa
 **Created**: 2026-02-06
-**Updated**: 2026-02-08
-**Version**: 0.3
+**Updated**: 2026-02-10
+**Version**: 0.6
 
 ---
 
@@ -313,6 +313,7 @@ Dispatch rules:
 - CAP-exposed coordination profile (optional): outer dispatch follows RFC 004 (`CAP_INVOKE`/`CAP_RESULT`) while coordination semantics apply to capability payload.
 - Operation actor DID source is signed envelope `from` (`actor_did`) in direct and CAP paths.
 - Coordination request payload MUST NOT define its own actor override field.
+- Direct profile failures mapped in Section 7 MUST be returned as AMP `ERROR`; direct `RESPONSE(status="error")` MUST NOT be used.
 
 Version and operation rules:
 - Supported version is `coord_v = 1`.
@@ -334,6 +335,15 @@ Processing:
 - `member_rev` initialized to `1`; `group_seq` initialized to `0`.
 - If group already exists, behavior is idempotent only when caller DID and initial normalized state are equivalent; otherwise reject with `4001`.
 
+Deterministic normalization for `group_create` idempotency:
+- `join_policy` absent is normalized to `"invite_only"`.
+- `meta` absent is normalized to an empty map.
+- `initial_members` absent is normalized to an empty list.
+- For each `initial_members` entry, absent `role` is normalized to `"member"`.
+- `initial_members` MUST NOT contain duplicate member DIDs; duplicates MUST be rejected with `4001`.
+- If `initial_members` contains caller DID, role MUST be `"owner"`; otherwise reject with `4001`.
+- Effective member set is built from normalized `initial_members` plus caller as active `owner`, then sorted by DID lexical order for equivalence comparison.
+
 Response:
 - `status = "ok"`
 - `group` snapshot with `member_rev` and current members.
@@ -348,6 +358,7 @@ Shared rules:
 `member_add`:
 - If target DID not present, add with role and `active` status.
 - If target exists as `removed`, re-activate and set requested role.
+- If request role is absent, effective role defaults to `"member"`.
 
 `member_remove`:
 - Marks target as `removed`.
@@ -439,6 +450,8 @@ Rules:
 - `from_seq` and `cursor` MUST NOT be present together.
 - If both `from_seq` and `cursor` are absent, receiver MUST treat query as `from_seq = 0`.
 - If `cursor` is present, requester MUST keep `group_id` and `include_payload` unchanged from original page; `limit` MAY change.
+- Cursor token MUST be bound to (`group_id`, `include_payload`) and include issuance time.
+- Cursor validity window is `600000` ms from issuance; expired cursor MUST be rejected with `4001`.
 - Invalid cursor/range/limit MUST be rejected with `4001`.
 
 ### 5.7 Coordination Body CDDL
@@ -469,15 +482,14 @@ coord-request = {
 coord-response = {
   "coord_v": 1,
   "op": coord-response-op,
-  "status": "ok" / "accepted" / "error",
+  "status": "ok" / "accepted",
   ? "group": coord-group,
   ? "member_rev": uint,
   ? "group_seq": uint,
   ? "recipient_count": uint,
   ? "events": [* coord-event],
   ? "next_cursor": tstr / null,
-  ? "has_more": bool,
-  ? "error": { "code": uint, "message": tstr }
+  ? "has_more": bool
 }
 
 coord-deliver-body = {
@@ -503,7 +515,7 @@ Capability ID:
 Rules:
 - `CAP_INVOKE.params` MUST contain exactly one RFC 011 request body with `coord_v = 1`.
 - Allowed CAP request ops are: `group_create`, `member_add`, `member_remove`, `member_role_set`, `group_update`, `group_send`, `group_state_get`, `group_events_query`.
-- `CAP_RESULT.result` MUST carry RFC 011 response body.
+- `CAP_RESULT(status="success").result` MUST carry RFC 011 response body.
 - If `CAP_INVOKE.body.delegation` is present, validation MUST follow RFC 005.
 - Invalid/unsupported delegation evidence MUST map to `3004`.
 - Direct profile `REQUEST`/`RESPONSE` direction rules MUST NOT be applied to CAP envelope types.
@@ -511,6 +523,7 @@ Rules:
 - `CAP_INVOKE.params.session` and `CAP_RESULT.result.session` MAY exist for payload-level compatibility, but if both payload and envelope session context are present, they MUST be semantically equivalent; mismatch MUST fail with `4001`.
 - Pre-execution rejection in CAP path MUST return AMP `ERROR` per RFC 004 semantics.
 - Only post-accept execution failures in CAP path MAY return `CAP_RESULT(status="error")`.
+- `CAP_RESULT(status="error")` MUST NOT be interpreted as RFC 011 `coord-response`.
 
 ---
 
@@ -808,6 +821,46 @@ Input:
 Expected:
 - Reject with `3001 UNAUTHORIZED`.
 
+### A.19 GROUP_CREATE Duplicate Member DID Negative
+
+Input:
+- `group_create.initial_members` contains duplicate DID entries.
+
+Expected:
+- Reject with `4001 BAD_REQUEST`.
+
+### A.20 GROUP_EVENTS_QUERY Expired Cursor Negative
+
+Input:
+- `group_events_query.cursor` references issuance timestamp older than `600000` ms.
+
+Expected:
+- Reject with `4001 BAD_REQUEST`.
+
+### A.21 MEMBER_ADD Default Role Positive
+
+Input:
+- `member_add` omits `role` for a new target DID.
+
+Expected:
+- Target is added as active `member` with deterministic default-role behavior.
+
+### A.22 CAP_RESULT Error Channel Semantics
+
+Input:
+- Post-accept coordination failure is returned as `CAP_RESULT(status="error")`.
+
+Expected:
+- Response is treated as RFC 004 CAP error channel, not RFC 011 `coord-response`.
+
+### A.23 Direct Profile Error Channel Semantics
+
+Input:
+- Direct coordination request fails validation (for example invalid non-fanout `op="group_deliver"` on `REQUEST` path).
+
+Expected:
+- Failure is returned as AMP `ERROR` with mapped code (for example `4001`), not `RESPONSE(status="error")`.
+
 ---
 
 ## Appendix B. Open Questions
@@ -820,7 +873,11 @@ No open questions in this revision.
 
 | Date | Version | Author | Changes |
 |------|---------|--------|---------|
-| 2026-02-06 | Proposal | TBD | Initial outline for multi-agent coordination and group messaging concepts |
+| 2026-02-06 | Proposal | Nowa | Initial outline for multi-agent coordination and group messaging concepts |
 | 2026-02-08 | 0.1 | Nowa | Rewrote RFC 011 into normative draft structure with conformance profiles, boundary contracts, deterministic coordination semantics, CDDL schemas, CAP interop mapping, error mapping, and minimal test vectors |
 | 2026-02-08 | 0.2 | Nowa | Fixed `group_seq` naming consistency, restricted `group_deliver` to coordinator fanout path, clarified actor binding source (`envelope.from`) and idempotency key, constrained admin owner-role mutation rules, and completed `group_events_query` cursor model with CDDL/error/vector coverage |
 | 2026-02-08 | 0.3 | Nowa | Made `group_events_query` default window deterministic (`from_seq=0`), aligned CAP error-channel behavior with RFC 004 (`ERROR` pre-exec, `CAP_RESULT(status=\"error\")` post-accept), normalized A.5 idempotency terminology to `actor_did`, and added CBOR/CDDL normative references |
+| 2026-02-08 | 0.4 | Nowa | Fixed direct-path error channel to AMP `ERROR` only, defined deterministic `group_create` normalization/equivalence rules, standardized cursor binding+expiry (`600000` ms), tightened `coord-response` success-only schema, and added vectors A.19-A.20 |
+| 2026-02-08 | 0.5 | Nowa | Resolved CAP success/error payload interpretation boundary, standardized default role behavior for `initial_members` and `member_add`, and added vectors A.21-A.22 |
+| 2026-02-09 | 0.6 | Nowa | Synchronized conformance metadata to RFC 011 v0.6 and added explicit direct-profile error-channel vector A.23 (`ERROR` vs `RESPONSE(status=error)`) |
+| 2026-02-10 | 0.6 | Nowa | Synchronized document metadata (`Updated`) and repository gate-status references for audit consistency |

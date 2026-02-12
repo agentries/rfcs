@@ -75,6 +75,16 @@
     { "vector_id": "010:A.9", "status": "skip", "notes": "Optional extension RFC 010 not implemented in this run" },
     { "vector_id": "010:A.12", "status": "skip", "notes": "Optional extension RFC 010 not implemented in this run" },
     { "vector_id": "010:A.16", "status": "skip", "notes": "Optional extension RFC 010 not implemented in this run" },
-    { "vector_id": "010:A.17", "status": "skip", "notes": "Optional extension RFC 010 not implemented in this run" }
+    { "vector_id": "010:A.17", "status": "skip", "notes": "Optional extension RFC 010 not implemented in this run" },
+    { "vector_id": "011:A.10", "status": "skip", "notes": "Optional extension RFC 011 not implemented in this run" },
+    { "vector_id": "011:A.15", "status": "skip", "notes": "Optional extension RFC 011 not implemented in this run" },
+    { "vector_id": "011:A.16", "status": "skip", "notes": "Optional extension RFC 011 not implemented in this run" },
+    { "vector_id": "011:A.17", "status": "skip", "notes": "Optional extension RFC 011 not implemented in this run" },
+    { "vector_id": "011:A.18", "status": "skip", "notes": "Optional extension RFC 011 not implemented in this run" },
+    { "vector_id": "011:A.19", "status": "skip", "notes": "Optional extension RFC 011 not implemented in this run" },
+    { "vector_id": "011:A.20", "status": "skip", "notes": "Optional extension RFC 011 not implemented in this run" },
+    { "vector_id": "011:A.21", "status": "skip", "notes": "Optional extension RFC 011 not implemented in this run" },
+    { "vector_id": "011:A.22", "status": "skip", "notes": "Optional extension RFC 011 not implemented in this run" },
+    { "vector_id": "011:A.23", "status": "skip", "notes": "Optional extension RFC 011 not implemented in this run" }
   ]
 }

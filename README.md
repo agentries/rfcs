@@ -21,21 +21,30 @@ Request for Comments (RFCs) for extending the Agentries protocol.
 
 Note: **Accepted** indicates implementation-ready specifications (byte-accurate and testable).
 
+## Current Conformance Target
+
+Current program target is `Draft` interoperability readiness.
+Design-requirement evaluation for RFC `001-011` in this cycle is based on `Draft` gate completion.
+Current-cycle design-requirement verdict for RFC `001-011`: `SATISFIED` (see `conformance/2026-02-07-draft-v1/GATE-STATUS.md`).
+In this cycle, a failing `Accepted` gate check is expected and does not block RFC `001-011` design-requirement closure.
+Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validate-design-requirements.sh conformance/2026-02-07-draft-v1/reports`.
+`Accepted/Implementation-Ready` is deferred until the conformance suite includes at least two independent `full-stack-pass` reports under `conformance/2026-02-07-draft-v1/reports`.
+
 ## Current RFCs
 
 | RFC | Title | Status | Author | Last Updated |
 |-----|-------|--------|--------|--------------|
-| 001 | [Agent Messaging Protocol (AMP Full Entry + Core Subset)](001-agent-messaging-protocol.md) | Draft v0.43 | Ryan Cooper, Jason Apple Huang | 2026-02-07 |
+| 001 | [Agent Messaging Protocol (AMP Full Entry + Core Subset)](001-agent-messaging-protocol.md) | Draft v0.44 | Ryan Cooper, Jason Apple Huang | 2026-02-10 |
 | 002 | [Transport Bindings (TCP-first, HTTP/WS mappings)](002-transport-bindings.md) | Draft v0.16 | Ryan Cooper, Nowa | 2026-02-07 |
 | 003 | [Relay & Store-and-Forward](003-relay-store-and-forward.md) | Draft v0.61 | Nowa | 2026-02-07 |
 | 004 | [Capability Schema Registry & Compatibility](004-capability-schema-registry.md) | Draft v0.12 | Ryan Cooper, Nowa | 2026-02-07 |
 | 005 | [Delegation Credentials & Authorization](005-delegation-authorization.md) | Draft v0.34 | Ryan Cooper, Nowa | 2026-02-07 |
 | 006 | [Session Protocol (State + Recovery)](006-session-protocol.md) | Draft v0.9 (coupled MTI + optional independent thread profile + explicit session_scope marker) | Ryan Cooper, Nowa | 2026-02-07 |
 | 007 | [Agent Payment Protocol](007-agent-payment-protocol.md) | Draft v0.34 (CAP precedence + session source-of-truth + split descriptor failure vectors + byte checks) | Ryan Cooper, Nowa | 2026-02-07 |
-| 008 | [Agent Discovery & Directory](008-agent-discovery-directory.md) | Draft v0.4 | Nowa | 2026-02-07 |
-| 009 | [Reputation & Trust Signals](009-reputation-trust-signals.md) | Draft v0.11 (session/CAP negative vectors + 3004 byte-level checks) | Nowa | 2026-02-07 |
-| 010 | [Observability & Evaluation Telemetry](010-observability-evaluation-telemetry.md) | Draft v0.5 | Nowa | 2026-02-08 |
-| 011 | [Multi-Agent Coordination & Group Messaging](011-multi-agent-coordination.md) | Draft v0.3 | Nowa | 2026-02-08 |
+| 008 | [Agent Discovery & Directory](008-agent-discovery-directory.md) | Draft v0.4 | Nowa | 2026-02-10 |
+| 009 | [Reputation & Trust Signals](009-reputation-trust-signals.md) | Draft v0.11 (session/CAP negative vectors + 3004 byte-level checks) | Nowa | 2026-02-10 |
+| 010 | [Observability & Evaluation Telemetry](010-observability-evaluation-telemetry.md) | Draft v0.5 | Nowa | 2026-02-10 |
+| 011 | [Multi-Agent Coordination & Group Messaging](011-multi-agent-coordination.md) | Draft v0.6 | Nowa | 2026-02-10 |
 
 ## Supporting Documents
 
@@ -44,6 +53,7 @@ Note: **Accepted** indicates implementation-ready specifications (byte-accurate 
 | [DECISION-LOG.md](DECISION-LOG.md) | Decision Log | Architectural decisions with rationale |
 | [AMP-FIRST-PRINCIPLES.md](AMP-FIRST-PRINCIPLES.md) | Research | Design rationale for AMP |
 | [conformance/2026-02-07-draft-v1/README.md](conformance/2026-02-07-draft-v1/README.md) | Conformance | Draft interoperability suite manifest + report schema/template |
+| [conformance/2026-02-07-draft-v1/GATE-STATUS.md](conformance/2026-02-07-draft-v1/GATE-STATUS.md) | Conformance | Accepted-gate readiness snapshot and remaining gaps |
 | [examples/rust-amp001/README.md](examples/rust-amp001/README.md) | Example | RFC 001 end-to-end demo (server/client) |
 | [examples/rust-amp002-004/README.md](examples/rust-amp002-004/README.md) | Example | RFC 002-004 transport and capability interop demo/tests |
 | [examples/rust-amp005/README.md](examples/rust-amp005/README.md) | Example | RFC 003 relay/store-and-forward E2E demo/tests |

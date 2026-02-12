@@ -3,7 +3,7 @@
 **Status**: Draft
 **Authors**: Nowa
 **Created**: 2026-02-06
-**Updated**: 2026-02-07
+**Updated**: 2026-02-10
 **Version**: 0.11
 
 ---
@@ -945,7 +945,7 @@ No open questions in this revision.
 
 | Date | Version | Author | Changes |
 |------|---------|--------|---------|
-| 2026-02-06 | Proposal | TBD | Initial outline for reputation and trust concepts |
+| 2026-02-06 | Proposal | Nowa | Initial outline for reputation and trust concepts |
 | 2026-02-07 | 0.1 | Nowa | Rewrote RFC 009 into normative draft format with conformance profiles, boundary contracts, deterministic aggregation/dispute semantics, CDDL schemas, error mapping, and minimal test vectors |
 | 2026-02-07 | 0.2 | Nowa | Added service-scoped subject model, deterministic `window_days`/`as_of` scoring rules, query cursor/context constraints, lifecycle status in query results, stronger evidence hash requirements, and added vectors A.10-A.12 |
 | 2026-02-07 | 0.3 | Nowa | Fixed deterministic-time edge case (`observed_at <= eval_now`), added strict-vs-delegated mutation baseline, standardized not-found to `4002`, added delegation error `3004`, and expanded vectors A.13-A.14 |
@@ -957,3 +957,4 @@ No open questions in this revision.
 | 2026-02-07 | 0.9 | Nowa | Completed CAP-exposed profile mapping with fixed capability ID, added attestation envelope size bound (`<=8192`) with deterministic errors, and expanded vectors A.20-A.22 |
 | 2026-02-07 | 0.10 | Nowa | Aligned session-scoped carriage with RFC 006 via explicit `body.session` CDDL fields, added CAP delegation invalid mapping (`3004`), and added vector A.23 |
 | 2026-02-07 | 0.11 | Nowa | Added session/CAP negative vectors A.24-A.25, added byte-level `3004` check via A.26, and clarified non-CAP delegation ignore rules in compatibility section |
+| 2026-02-10 | 0.11 | Nowa | Synchronized document metadata (`Updated`) and repository gate-status references for audit consistency |
