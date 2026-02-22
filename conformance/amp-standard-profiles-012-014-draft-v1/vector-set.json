@@ -1,0 +1,61 @@
+{
+  "suite_version": "amp-standard-profiles-012-014-draft-v1",
+  "status": "draft",
+  "referenced_rfcs": [
+    { "id": "012", "version": "0.1" },
+    { "id": "013", "version": "0.1" },
+    { "id": "014", "version": "0.2" }
+  ],
+  "dependency_rfcs": [
+    { "id": "001", "version": "0.46" }
+  ],
+  "profiles": [
+    {
+      "id": "amp-standard-profiles-012-014",
+      "required_field": "required_vectors",
+      "description": "AMP Standard Profiles gate profile for RFC 012-014 (Task, Negotiation, Handoff)."
+    }
+  ],
+  "required_vectors": [
+    "012:A.1",
+    "012:A.2",
+    "012:A.3",
+    "012:A.4",
+    "012:A.5",
+    "012:A.6",
+    "012:A.7",
+    "012:A.8",
+    "012:A.9",
+    "012:A.10",
+    "012:A.11",
+    "012:A.12",
+    "012:A.13",
+    "012:A.14",
+    "012:A.15",
+    "012:A.16",
+    "012:A.17",
+    "013:A.1",
+    "013:A.2",
+    "013:A.3",
+    "013:A.4",
+    "013:A.5",
+    "013:A.6",
+    "013:A.7",
+    "013:A.8",
+    "013:A.9",
+    "013:A.10",
+    "014:A.1",
+    "014:A.2",
+    "014:A.3",
+    "014:A.4",
+    "014:A.5",
+    "014:A.6",
+    "014:A.7",
+    "014:A.8",
+    "014:A.9",
+    "014:A.10",
+    "014:A.11",
+    "014:A.12"
+  ],
+  "optional_vectors": []
+}

@@ -30,7 +30,7 @@ In this cycle, a failing `Accepted` gate check is expected and does not block RF
 Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validate-design-requirements.sh conformance/2026-02-07-draft-v1/reports`.
 `Accepted/Implementation-Ready` is deferred until the conformance suite includes at least two independent `full-stack-pass` reports under `conformance/2026-02-07-draft-v1/reports`.
 
-**RFC 012-014 (Standard Profiles)**: These RFCs are at initial Draft and are NOT yet included in the conformance gate. A separate gate profile (e.g., `amp-standard-profiles-012-014`) will be defined once these specifications stabilize beyond initial draft.
+**RFC 012-014 (Standard Profiles)**: These RFCs are at initial Draft. A conformance suite is defined at `conformance/amp-standard-profiles-012-014-draft-v1/` with a single `amp-standard-profiles-012-014` profile covering all 39 Appendix A vectors. Draft gate: `NOT SATISFIED` (see `conformance/amp-standard-profiles-012-014-draft-v1/GATE-STATUS.md`).
 
 ## Current RFCs
 
@@ -62,6 +62,9 @@ Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validat
 | [examples/rust-amp001/README.md](examples/rust-amp001/README.md) | Example | RFC 001 end-to-end demo (server/client) |
 | [examples/rust-amp002-004/README.md](examples/rust-amp002-004/README.md) | Example | RFC 002-004 transport and capability interop demo/tests |
 | [examples/rust-amp005/README.md](examples/rust-amp005/README.md) | Example | RFC 003 relay/store-and-forward E2E demo/tests |
+| [conformance/amp-standard-profiles-012-014-draft-v1/README.md](conformance/amp-standard-profiles-012-014-draft-v1/README.md) | Conformance | Draft interoperability suite for RFC 012-014 Standard Profiles |
+| [conformance/amp-standard-profiles-012-014-draft-v1/GATE-STATUS.md](conformance/amp-standard-profiles-012-014-draft-v1/GATE-STATUS.md) | Conformance | Gate readiness snapshot for RFC 012-014 Standard Profiles |
+| [lint/validate-rfc-metadata.sh](lint/validate-rfc-metadata.sh) | Lint | RFC header metadata and README sync validator |
 
 ## RFC Proposals (Outlines)
 
