@@ -155,12 +155,14 @@ Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validat
          │                │              │               │
          ▼                ▼              ▼               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    RFCs by Priority                              │
+│              AMP Infrastructure (reusable)                       │
 ├─────────────────────┬───────────────────────────────────────────┤
-│  P0: Core           │  RFC 001 AMP Core                         │
+│  AMP Core           │  RFC 001 AMP Core (envelope/signing)      │
 │                     │  RFC 002 Transport Bindings               │
 │                     │  RFC 003 Relay & Store-and-Forward        │
-├─────────────────────┼───────────────────────────────────────────┤
+├─────────────────────┴───────────────────────────────────────────┤
+│              Agentries Application Profile (AMP Full)            │
+├─────────────────────┬───────────────────────────────────────────┤
 │  P1: Extensions     │  RFC 004 Capability Schema Registry       │
 │                     │  RFC 005 Delegation Credentials           │
 │                     │  RFC 006 Session Protocol                 │
@@ -174,7 +176,7 @@ Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validat
 └─────────────────────┴───────────────────────────────────────────┘
 ```
 
-**Note**: RFC 001-003 (AMP Infrastructure) are designed as general-purpose agent communication infrastructure. RFC 004-011 define application semantics for the Agentries ecosystem. External projects MAY adopt RFC 001-003 and define their own application semantics using AMP's extension type code range (0x80-0xFF) and registry governance (RFC 001 §17).
+**AMP Infrastructure** (RFC 001-003) is general-purpose agent communication infrastructure. Any project MAY adopt it and define domain-specific Standard or Private Profiles on top (see RFC 001 §1.5 and §17). **Agentries Application Profile** (RFC 004-011) is the built-in Standard Profile for the Agentries ecosystem and serves as the reference implementation of the profile pattern.
 
 ## Design Principles
 

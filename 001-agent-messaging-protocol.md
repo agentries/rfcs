@@ -102,10 +102,24 @@ An implementation conforms to AMP Core if it satisfies all **MUST/REQUIRED** sta
 
 Support for capabilities, sessions, discovery, and other extensions is optional for AMP Core conformance; if implemented, those features MUST follow their respective RFCs (RFC 004/006/008).
 
-Conformance profiles:
-- `AMP Core`: Envelope/security/handshake/error/ack behavior defined in this RFC. AMP Core is general-purpose infrastructure and does not mandate any application-layer message types.
-- `AMP Full`: AMP Core plus document/credential/delegation application flows in this RFC and companion RFCs.
-- `AMP Application Profile`: An external specification that builds on AMP Core by registering domain-specific message type codes (§17) and defining their flows, body schemas, and state machines. Application profiles are independent of AMP Full and MAY coexist with it.
+Conformance tiers:
+
+1. **AMP Core** (strong interoperability promise):
+   Envelope/security/handshake/error/ack behavior defined in this RFC. AMP Core is general-purpose infrastructure and guarantees that any conformant implementation can send, receive, verify, route, and store-forward AMP messages regardless of application domain. AMP Core does not mandate any application-layer message types.
+
+2. **AMP Standard Profiles** (semantic interoperability promise):
+   Application-level protocols built on AMP Core that go through registration and version governance (§17). Each Standard Profile gets one registered type code in `0x80-0xEF` and defines its own action vocabulary, body schemas, message flows, and security requirements. `AMP Full` (§5-§7, §11-§12, and companion RFCs 004-011) is the built-in Standard Profile for the Agentries ecosystem.
+
+3. **AMP Private Profiles** (no interoperability promise):
+   Experimental or vendor-specific protocols using `typ = 0xF0`. Private Profiles MUST NOT break AMP Core semantics but carry no cross-project interoperability guarantee. Private Profiles MAY graduate to Standard Profiles via the registration process.
+
+**Profile extensibility rules** (normative):
+
+1. **Type code governance**: `typ` identifies the semantic category (one code per profile in the extension range). Fine-grained actions MUST be carried in `body.action`. This prevents type code exhaustion while keeping protocol-level dispatch efficient.
+2. **Profile discoverability**: Implementations supporting Standard or Private Profiles SHOULD declare `profiles` in HELLO (§13) so peers discover compatibility at connection time, not after message failure.
+3. **Profile minimum specification**: Every Standard Profile registration (§17) MUST include: profile name, version, allocated type code, action vocabulary, body CDDL schemas, message flows, and security/authorization requirements.
+4. **Relay neutrality**: Relays (RFC 003) MUST NOT parse or interpret profile message bodies for routing decisions. Topic-based or content-based routing MUST be implemented at the application layer (e.g., via a broker agent), not by extending relay core behavior.
+5. **Security boundary**: AMP Core guarantees envelope integrity, signature verification, and transport security. Each Standard Profile MUST declare its own authorization model and abuse-prevention requirements; profiles that lack explicit security requirements MUST NOT be registered in the Standard Profile range.
 
 `AMP Full` delegated-execution baseline:
 - Implementations claiming delegated execution MUST support the delegation carriage model in Section 4.6 for `CAP_INVOKE`.
@@ -277,7 +291,8 @@ Message type categories:
 | **Document** | DOC_SEND, DOC_REQUEST | Document exchange |
 | **Credential** | CRED_ISSUE, CRED_REQUEST, CRED_PRESENT, CRED_VERIFY | Credential exchange |
 | **Delegation** | DELEG_GRANT, DELEG_REVOKE, DELEG_QUERY | Delegation management |
-| **Extension** | 0x80-0xFF | Domain-specific application semantics (registered or experimental, see §17) |
+| **Standard Profile** | 0x80-0xEF | One code per registered profile; actions in `body.action` (see §4.3, §17) |
+| **Private Profile** | 0xF0 | Experimental profiles; discriminated by `body.profile` (see §4.3) |
 
 ### 3.4 Message Lifecycle
 
@@ -483,23 +498,50 @@ HELLO_REJECT      = 0x72    ; No compatible version found
 ; 0x73-0x7F reserved
 
 ; ═══════════════════════════════════════════════════════════════
-; STANDARD EXTENSION (0x80-0xEF) — Registered application types
+; STANDARD PROFILE (0x80-0xEF) — Registered application profiles
 ; ═══════════════════════════════════════════════════════════════
-; Reserved for domain-specific application protocols built on AMP.
+; Each registered Standard Profile gets ONE type code.
+; Actions within the profile are carried in body.action (tstr).
 ; Registration required via §17 process.
-; 0x80-0xEF available for registered standard extension types
+; 0x80-0xEF available for registered Standard Profile types
 
 ; ═══════════════════════════════════════════════════════════════
-; EXPERIMENTAL EXTENSION (0xF0-0xFF) — Vendor/experimental
+; PRIVATE PROFILE (0xF0) — Vendor/experimental profiles
 ; ═══════════════════════════════════════════════════════════════
-EXTENSION         = 0xF0    ; Extension message (see ext field)
-; 0xF1-0xFF available for vendor/experimental extension types
+PRIVATE_PROFILE   = 0xF0    ; Private/experimental profile message
+; All Private Profiles share 0xF0; discrimination via body.profile.
+; 0xF1-0xFF reserved for future allocation
 ```
 
 **Type Semantics**:
 - Capability message semantics are defined in **RFC 004**.
 - Contact, discovery, and presence message semantics are defined in **RFC 008**.
 - Provisional response semantics are defined in **RFC 006**.
+
+**Profile Body Contracts**:
+
+Standard Profile messages (`typ` 0x80-0xEF) MUST use the following body structure:
+
+```cddl
+standard-profile-body = {
+  "action": tstr,            ; profile-defined action verb
+  "profile_v": semver,       ; profile version (semver)
+  * tstr => any              ; profile-specific payload fields
+}
+```
+
+Private Profile messages (`typ` 0xF0) MUST use the following body structure:
+
+```cddl
+private-profile-body = {
+  "profile": tstr,           ; profile name (reverse-domain, e.g., "com.example.myapp")
+  "action": tstr,            ; profile-defined action verb
+  "profile_v": semver,       ; profile version (semver)
+  * tstr => any              ; profile-specific payload fields
+}
+```
+
+All profile body fields (`action`, `profile_v`, `profile`) are inside signed `body` and therefore integrity-protected. Relay and intermediary nodes MUST NOT use these fields for routing decisions (see §1.5 rule 4).
 
 ### 4.4 Message Body Schemas (CDDL)
 
@@ -627,11 +669,17 @@ deleg-query-body = {
 ; Handshake bodies
 hello-body = {
   "versions": [+ semver],
+  ? "profiles": [* profile-descriptor],  ; supported application profiles
   ? "extensions": [* tstr],
   ? "agent_info": {
     "name": tstr,
     ? "implementation": tstr
   }
+}
+
+profile-descriptor = {
+  "name": tstr,              ; profile name (e.g., "lineage.knowledge")
+  "version": semver          ; supported profile version
 }
 
 hello-ack-body = {
@@ -1290,6 +1338,10 @@ HELLO_REJECT    = 0x72    ; No compatible version
   "typ": 0x70,  ; HELLO
   "body": {
     "versions": ["2.0", "1.0"],  ; preferred first
+    "profiles": [                ; supported application profiles (optional)
+      {"name": "agentries.cap", "version": "1.0"},
+      {"name": "lineage.knowledge", "version": "0.1.0"}
+    ],
     "extensions": ["streaming", "compression"],
     "agent_info": {
       "name": "code-review-bot",
@@ -1298,6 +1350,8 @@ HELLO_REJECT    = 0x72    ; No compatible version
   }
 }
 ```
+
+**Profile negotiation**: `profiles` is OPTIONAL. If present, peers SHOULD use the intersection of declared profiles to determine compatible application semantics. An empty intersection does not prevent AMP Core communication — it only indicates no shared application profiles.
 
 ### 13.4 Backward Compatibility
 
@@ -1339,14 +1393,19 @@ Discovery/contact/presence semantics remain in `008-agent-discovery-directory.md
 
 ### 14.2 Building Domain Protocols on AMP
 
-External projects MAY define domain-specific application protocols on top of AMP Core. Such protocols:
+External projects MAY define domain-specific application protocols on top of AMP Core. The recommended adoption path:
 
-1. MUST use AMP Core envelope, signing, and transport semantics unchanged.
-2. SHOULD register domain message type codes in the standard extension range (0x80-0xEF) via §17 to avoid conflicts.
-3. MAY use the experimental range (0xF0-0xFF) for prototyping without registration.
-4. SHOULD document their message flows, body CDDL schemas, and state machines as an AMP Application Profile (see §1.5).
-5. MUST NOT redefine AMP Core behavior (envelope fields, signature verification, ACK/ERROR semantics).
-6. MAY coexist with AMP Full semantics — an agent can support both AMP Full and one or more application profiles simultaneously.
+1. **Prototype** with a Private Profile (`typ = 0xF0`, `body.profile` = reverse-domain name). No registration required.
+2. **Stabilize** by registering as a Standard Profile (`typ` in `0x80-0xEF`) via §17. Registration requires: profile name, version, action vocabulary, body CDDL schemas, message flows, and security requirements (see §1.5 rule 3).
+3. **Declare** supported profiles in HELLO `profiles` field (§13.3) for connection-time compatibility discovery.
+
+Hard constraints:
+- MUST use AMP Core envelope, signing, and transport semantics unchanged.
+- MUST carry fine-grained actions in `body.action`, not in additional type codes (see §1.5 rule 1).
+- MUST NOT redefine AMP Core behavior (envelope fields, signature verification, ACK/ERROR semantics).
+- MUST NOT require relay to parse profile message bodies for routing (see §1.5 rule 4).
+- MUST declare authorization model and abuse-prevention requirements for Standard Profile registration (see §1.5 rule 5).
+- MAY coexist with AMP Full and other profiles — an agent can support multiple profiles simultaneously.
 
 ---
 
@@ -1571,8 +1630,9 @@ On no response within timeout:
 
 **Message Type Codes**:
 - 0x00-0x7F: Reserved for AMP core (requires RFC)
-- 0x80-0xEF: Available for standard extensions (requires registration)
-- 0xF0-0xFF: Experimental/vendor-specific (no registration)
+- 0x80-0xEF: One code per registered Standard Profile (requires registration)
+- 0xF0: Shared by all Private Profiles (no registration; discriminated by `body.profile`)
+- 0xF1-0xFF: Reserved for future allocation
 
 **Error Codes**:
 - x000-x899: Reserved for AMP core
@@ -1588,14 +1648,20 @@ On no response within timeout:
 3. Review by maintainers
 4. Merge into registry document
 
-**Application Profile registration** follows the same process with additional fields:
-1. Profile name (reverse-domain recommended, e.g., `com.example.knowledge.v1`)
-2. Required message type codes (from 0x80-0xEF range or 0xF0-0xFF experimental)
-3. Message flow descriptions and body CDDL schemas
-4. Dependency declaration (e.g., "requires AMP Core" or "requires AMP Core + RFC 003 relay")
+**Standard Profile registration** follows the same process with additional required fields (see §1.5 rule 3):
+1. Profile name (reverse-domain recommended, e.g., `com.example.knowledge`)
+2. Profile version (semver)
+3. Requested type code (one code from `0x80-0xEF`)
+4. Action vocabulary (`body.action` string values and their semantics)
+5. Body CDDL schemas (per action)
+6. Message flow descriptions (state machines if applicable)
+7. Security and authorization requirements (MUST be explicit; see §1.5 rule 5)
+8. Dependency declaration (e.g., "requires AMP Core" or "requires AMP Core + RFC 003 relay")
+
+Profiles that lack explicit security requirements MUST NOT be registered in the Standard Profile range. Private Profiles (`typ = 0xF0`) do not require registration.
 
 Scope note:
-- This process applies to AMP message type codes, error codes, extension fields, and application profiles.
+- This process applies to AMP message type codes, error codes, extension fields, and Standard Profiles.
 - Capability namespaces and capability version governance are defined in RFC 004 and do not require centralized registration in this process.
 
 ---
@@ -2007,4 +2073,4 @@ Versioning note: public version numbers were reset on 2026-02-06 for external pu
 | 2026-02-07 | 0.42 | 5.31 | Nowa | Added conformance suite publication location and governance requirements for Accepted/Implementation-Ready gate auditability |
 | 2026-02-07 | 0.43 | 5.32 | Nowa | Added batch and document MIME test vectors (`A.10`/`A.11`) to close R10/R19 gate coverage, added optional MIME diversity vector (`A.12`), and updated Full coverage matrix mapping |
 | 2026-02-10 | 0.44 | 5.33 | Nowa | Aligned interop gate profile naming to `amp-full-stack-001-011`, synchronized optional-extension scope to RFC 007-011, and updated full-stack coverage matrix vectors accordingly |
-| 2026-02-22 | 0.45 | 5.34 | Nowa | Clarified AMP as extensible layered infrastructure: added Application Profile concept to §1.5, separated infrastructure vs application problems in §1.3, added standard extension type code block in §4.3, added Extension row to §3.3, added §14.2 domain protocol guidance, added application profile registration to §17, renamed §9 from "Agentries Integration" to "Discovery & Contactability" |
+| 2026-02-22 | 0.45 | 5.34 | Nowa | Defined three-tier conformance model (Core / Standard Profile / Private Profile) with 5 normative extensibility rules in §1.5. Introduced one-code-per-profile type allocation (0x80-0xEF Standard, 0xF0 Private) with `body.action` dispatch in §4.3. Added `profile-descriptor` to HELLO CDDL and `profiles` negotiation to §13.3. Added profile body CDDL contracts (standard-profile-body, private-profile-body). Updated §14.2 with adoption path and hard constraints. Updated §17 with Standard Profile registration requirements. Renamed §9 to "Discovery & Contactability". Separated infrastructure vs application problems in §1.3. |

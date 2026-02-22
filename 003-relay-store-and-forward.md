@@ -101,7 +101,12 @@ The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, MAY, and OPTIONAL ar
 - MUST use RFC 002 relay-forward wrapper and transfer-receipt object for federation interoperability.
 - MUST support downstream commit feedback in dual-custody mode via commit-receipt.
 
-Future relay profiles (for example, topic-based publish/subscribe routing) MAY be defined in companion RFCs and MUST be additive to Relay Core Profile.
+Relay neutrality (normative, see RFC 001 §1.5 rule 4):
+- Relays MUST NOT parse or interpret application profile message bodies (`typ` 0x80-0xF0) for routing or delivery decisions.
+- Relays MUST treat Standard Profile and Private Profile messages identically to any other data message for queueing, TTL, delivery, and commit purposes.
+- Topic-based or content-based routing MUST be implemented at the application layer (e.g., via a broker agent with its own DID), not by extending relay core behavior.
+
+Future relay profiles (for example, topic-based publish/subscribe routing as a relay-level concern) MAY be defined in companion RFCs only if relay-neutral application-layer approaches prove insufficient. Such profiles MUST be additive to Relay Core Profile and MUST NOT alter existing relay neutrality guarantees for non-participating implementations.
 
 ### 2.1 Terminology
 
