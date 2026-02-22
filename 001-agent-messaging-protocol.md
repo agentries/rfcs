@@ -1687,10 +1687,10 @@ On no response within timeout:
 - 0xF0: Shared by all Private Profiles (no registration; discriminated by `body.profile`)
 - 0xF1-0xFF: Reserved for future allocation
 
-**Error Codes**:
-- x000-x099: AMP Core (protocol/routing/security/generic client/server)
-- x1xx-x8xx: Registered extension codes (Standard Profiles, Application Profiles); allocation via §17 process. Each registered profile receives a dedicated sub-range (e.g., 41xx = Payment, 42xx = Task, 43xx = Negotiation, 44xx = Handoff). Sub-range assignments are tracked in the registry.
-- x9xx: Vendor-specific (no registration)
+**Error Codes** (per category — `1xxx` protocol, `2xxx` routing, `3xxx` security, `4xxx` client, `5xxx` server):
+- `x000-x099`: AMP Core errors (e.g., `1001` INVALID_MESSAGE, `3001` UNAUTHORIZED, `4001` BAD_REQUEST, `5001` INTERNAL_ERROR)
+- `x100-x899`: Profile-allocated extension codes; each registered profile receives a dedicated sub-range via §17 (e.g., `41xx` = Payment, `42xx` = Task, `43xx` = Negotiation, `44xx` = Handoff)
+- `x900-x999`: Vendor-specific (no registration required)
 
 **Capability Namespaces**:
 - Defined in RFC 004 (Capability Schema Registry & Compatibility)

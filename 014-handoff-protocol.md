@@ -123,17 +123,19 @@ An implementation is conformant only if it:
 ### 2.2 Role Profiles and MTI Requirements
 
 `Source Agent Profile`:
-- MUST support `initiate`, `complete`, `cancel`, and `status_query` actions.
+- MUST support `initiate`, `complete`, `fail`, `cancel`, and `status_query` actions.
 - MUST generate a unique `handoff_id` (`bstr .size 16`) per handoff lifecycle.
 - MUST package context with appropriate fidelity for the target agent.
 - MUST notify the client of the handoff when a client DID is known.
 - MUST enforce one handoff lifecycle state machine per `handoff_id`.
 - MUST use stable `handoff_id` per intent and preserve idempotency on retries.
+- MUST send `fail` when `assist` mode handoff cannot be completed.
 
 `Target Agent Profile`:
-- MUST support `accept`, `reject`, and `status_query` actions.
+- MUST support `accept`, `reject`, `fail`, and `status_query` actions.
 - MUST validate the context package before accepting a handoff.
 - MUST send `complete` when handoff work is finished (for `full` and `escalate` modes).
+- MUST send `fail` when handoff work cannot be completed (for `full` and `escalate` modes).
 - MUST provide status query responses for active and terminal handoffs.
 
 `Client Profile` (optional participation):
@@ -475,8 +477,10 @@ The following matrix is normative:
 | `initiate` | source -> target | `accept` / `reject` | response `reply_to` MUST reference `initiate` message `id` |
 | `accept` | target -> source | (none required) | N/A |
 | `reject` | target -> source | (none required) | N/A |
-| `complete` | source or target -> counterpart | (none required) | N/A |
-| `fail` | source or target -> counterpart | (none required) | N/A |
+| `complete` (full/escalate) | target -> source | (none required) | N/A |
+| `complete` (assist) | either -> counterpart | (none required) | N/A |
+| `fail` (full/escalate) | target -> source | (none required) | N/A |
+| `fail` (assist) | source -> target | (none required) | N/A |
 | `notify` | source -> client | `client_veto` (optional) | veto `reply_to` MUST reference `notify` message `id` |
 | `client_veto` | client -> source | (none required) | N/A |
 | `cancel` (source-initiated) | source -> target | (none required) | N/A |
@@ -931,6 +935,29 @@ Input:
 Expected:
 - Reject with `3001 UNAUTHORIZED`.
 - Byte-level check: error code `3001` is CBOR uint bytes `19 0b b9`.
+
+### A.11 Fail from Accepted Positive
+
+Input:
+- Source sends `initiate` with `mode = "full"`.
+- Target sends `accept`.
+- Target sends `fail` with `error_code = 5001` and `message = "Internal processing error"`.
+
+Expected:
+- State transitions: `INITIATED -> ACCEPTED -> FAILED`.
+- Source receives `fail` with `error_code` and `message`.
+- Handoff lifecycle terminates.
+
+### A.12 Fail from Invalid State Negative (4402)
+
+Input:
+- Source sends `initiate` with `mode = "full"`.
+- Target sends `fail` (without first accepting).
+
+Expected:
+- Reject with `4402 INVALID_STATE_TRANSITION`.
+- Byte-level check: error code `4402` is CBOR uint bytes `19 11 32`.
+- Handoff remains in `INITIATED` state.
 
 ---
 
