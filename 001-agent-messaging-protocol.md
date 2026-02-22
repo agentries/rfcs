@@ -1688,7 +1688,7 @@ On no response within timeout:
 
 **Error Codes**:
 - x000-x099: AMP Core (protocol/routing/security/generic client/server)
-- x1xx-x8xx: Registered extension codes (Standard Profiles, Application Profiles); allocation via §17 process
+- x1xx-x8xx: Registered extension codes (Standard Profiles, Application Profiles); allocation via §17 process. Each registered profile receives a dedicated sub-range (e.g., 41xx = Payment, 42xx = Task, 43xx = Negotiation, 44xx = Handoff). Sub-range assignments are tracked in the registry.
 - x9xx: Vendor-specific (no registration)
 
 **Capability Namespaces**:

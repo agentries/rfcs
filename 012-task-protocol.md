@@ -828,7 +828,13 @@ Compatibility rules:
 - Unknown optional fields MAY be ignored unless security-sensitive.
 - Backward-compatible extensions MUST use optional fields only and MUST NOT change the semantics of existing fields.
 - Minor version increments (for example `"1.1.0"`) indicate backward-compatible additions.
-- Major version increments (for example `"2.0.0"`) indicate breaking changes and require re-negotiation via HELLO.
+- Major version increments (for example `"2.0.0"`) indicate breaking changes and MUST be negotiated via HELLO profile matching (RFC 001 Section 13.3).
+
+Profile negotiation:
+- Implementations SHOULD declare `xyz.agentries.task` in HELLO `profiles` field for connection-time compatibility discovery.
+- If the peer declares `typ = 0x80` for this profile in HELLO, senders MUST use `typ = 0x80`.
+- If the peer does not declare `typ` or no HELLO was exchanged, senders MUST use `typ = 0xF0` (Private Profile fallback).
+- Receivers MUST accept both `typ = 0x80` and `typ = 0xF0` with matching `body.profile` (dual-accept rule).
 
 ---
 
