@@ -517,18 +517,19 @@ Round number invariants:
 
 This RFC reuses RFC 001 error model and introduces negotiation-specific business codes in the `43xx` range.
 
-Deterministic precedence:
-- Parse/shape/type failures -> `1001`.
-- Unsupported `profile_v` -> `4006`.
-- Unknown profile (`body.profile`) -> `4005`.
-- Authorization identity/policy failure -> `3001`.
-- CAP pre-resolution/coarse policy denial -> `3001` (RFC 004 validation order).
-- CAP delegation evidence failure (after coarse auth checks) -> `3004`.
-- CAP descriptor signature/trust-profile verification failure -> `3001`.
-- Negotiation semantic/request-shape conflicts -> `4001`.
-- Negotiation state/business failures -> `43xx`.
-- CAP descriptor/schema artifact unavailable or integrity source unavailable -> `5002`.
-- Transient backend failures -> `500x`.
+Deterministic precedence (evaluated in order):
+1. Parse/shape/type failures (missing required fields, invalid CBOR) -> `1001`.
+2. Profile/typ mismatch (`typ = 0x81` but `body.profile` not `"xyz.agentries.negotiation"`) -> `4001`.
+3. Unknown profile (message via `typ = 0xF0` with unrecognized `body.profile`) -> `4005`.
+4. Unsupported `profile_v` -> `4006`.
+5. Authorization identity/policy failure -> `3001`.
+6. CAP pre-resolution/coarse policy denial -> `3001` (RFC 004 validation order).
+7. CAP delegation evidence failure (after coarse auth checks) -> `3004`.
+8. CAP descriptor signature/trust-profile verification failure -> `3001`.
+9. Negotiation semantic/request-shape conflicts -> `4001`.
+10. Negotiation state/business failures -> `43xx`.
+11. CAP descriptor/schema artifact unavailable or integrity source unavailable -> `5002`.
+12. Transient backend failures -> `500x`.
 
 | Condition | Code | Name | Retry |
 |-----------|------|------|-------|

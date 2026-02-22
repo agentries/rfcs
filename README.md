@@ -6,7 +6,7 @@ Request for Comments (RFCs) for extending the Agentries protocol.
 
 | Type | Description | Location |
 |------|-------------|----------|
-| **RFC (Standard)** | Normative specifications, ready for implementation | Repository root (`./`) |
+| **RFC (Standard)** | Normative specifications (readiness depends on maturity status) | Repository root (`./`) |
 | **Research** | Design rationale and analysis (informative only) | Repository root (`./`) |
 | **Decision Log** | Record of architectural decisions | `DECISION-LOG.md` |
 

@@ -786,13 +786,14 @@ Implementations MUST validate state transitions before applying them. Invalid tr
 This RFC reuses the RFC 001 error model and introduces task-specific business codes in the `42xx` range.
 
 Deterministic precedence (evaluated in order):
-1. Parse/shape/type failures -> `1001 INVALID_MESSAGE`.
-2. Unsupported `profile_v` -> `4006 PROFILE_VERSION_UNSUPPORTED`.
-3. Authorization identity/policy failure -> `3001 UNAUTHORIZED`.
-4. Unknown profile -> `4005 UNKNOWN_PROFILE`.
-5. Action/typ direction mismatch or malformed correlation -> `4001 BAD_REQUEST`.
-6. Task semantic/state failures -> `42xx`.
-7. Transient backend failures -> `500x`.
+1. Parse/shape/type failures (missing required fields, invalid CBOR) -> `1001 INVALID_MESSAGE`.
+2. Profile/typ mismatch (`typ = 0x80` but `body.profile` not `"xyz.agentries.task"`) -> `4001 BAD_REQUEST`.
+3. Unknown profile (message via `typ = 0xF0` with unrecognized `body.profile`) -> `4005 UNKNOWN_PROFILE`.
+4. Unsupported `profile_v` -> `4006 PROFILE_VERSION_UNSUPPORTED`.
+5. Authorization identity/policy failure -> `3001 UNAUTHORIZED`.
+6. Action/typ direction mismatch or malformed correlation -> `4001 BAD_REQUEST`.
+7. Task semantic/state failures -> `42xx`.
+8. Transient backend failures -> `500x`.
 
 | Condition | Code | Name | Retry |
 |-----------|------|------|-------|

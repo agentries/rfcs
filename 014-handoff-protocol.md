@@ -20,6 +20,8 @@
 - RFC 005: Delegation Credentials and Authorization (delegated handoff execution)
 - RFC 006: Session Protocol (optional session migration on handoff)
 - RFC 007: Agent Payment Protocol (handoff terms may reference payment)
+- RFC 008: Agent Discovery and Directory (target discovery by capability)
+- RFC 009: Reputation and Trust Signals (post-handoff reputation updates)
 - RFC 012: Task Protocol (optional task snapshot in context package)
 - RFC 013: Negotiation Protocol (handoff terms may reference negotiation)
 
@@ -311,6 +313,7 @@ handoff-base = {
 - A message is treated as a handoff message when `typ` is `0x82`, or when `typ` is `0xF0` and `body.profile` equals `"xyz.agentries.handoff"`.
 - For handoff messages, `body.action` and `body.handoff_id` are REQUIRED; missing or invalid fields MUST be rejected as `1001 INVALID_MESSAGE`.
 - `body.profile` MUST equal `"xyz.agentries.handoff"`; receivers MUST validate this and SHOULD reject mismatches with `4001 BAD_REQUEST` (per RFC 001 Section 4.3).
+- `body.profile_v` MUST be a supported profile version. For this revision, `profile_v` MUST be `"1.0.0"`. Unsupported values MUST be rejected with `4006 PROFILE_VERSION_UNSUPPORTED`.
 - Unknown `action` values in handoff messages MUST be rejected with `4405 UNKNOWN_HANDOFF_ACTION`.
 
 ### 5.2 Initiate Flow
@@ -457,7 +460,8 @@ The following matrix is normative:
 | `complete` | source or target -> counterpart | (none required) | N/A |
 | `notify` | source -> client | `client_veto` (optional) | veto `reply_to` MUST reference `notify` message `id` |
 | `client_veto` | client -> source | (none required) | N/A |
-| `cancel` | source or client -> target | (none required) | N/A |
+| `cancel` (source-initiated) | source -> target | (none required) | N/A |
+| `cancel` (client-initiated) | client -> source | (none required; source MUST forward to target) | N/A |
 | `status_query` | any -> any | `status` | `status` `reply_to` MUST reference `status_query` message `id` |
 | `status` | queried party -> requester | (none required) | N/A |
 
@@ -664,18 +668,19 @@ REJECTED / COMPLETED / FAILED / CANCELED
 
 This RFC reuses the RFC 001 error model and introduces handoff-specific business codes in the `44xx` range.
 
-Deterministic precedence:
-- Parse/shape/type failures -> `1001`.
-- Unsupported `profile_v` -> `4006`.
-- Unknown `body.profile` -> `4005`.
-- Authorization identity/policy failure -> `3001`.
-- CAP pre-resolution/coarse policy denial -> `3001` (RFC 004 validation order).
-- CAP delegation evidence failure (after coarse auth checks) -> `3004`.
-- CAP descriptor signature/trust-profile verification failure -> `3001`.
-- Handoff semantic/request-shape conflicts -> `4001`.
-- Handoff state/business failures -> `44xx`.
-- CAP descriptor/schema artifact unavailable or integrity source unavailable -> `5002`.
-- Transient backend failures -> `500x`.
+Deterministic precedence (evaluated in order):
+1. Parse/shape/type failures (missing required fields, invalid CBOR) -> `1001`.
+2. Profile/typ mismatch (`typ = 0x82` but `body.profile` not `"xyz.agentries.handoff"`) -> `4001`.
+3. Unknown profile (message via `typ = 0xF0` with unrecognized `body.profile`) -> `4005`.
+4. Unsupported `profile_v` -> `4006`.
+5. Authorization identity/policy failure -> `3001`.
+6. CAP pre-resolution/coarse policy denial -> `3001` (RFC 004 validation order).
+7. CAP delegation evidence failure (after coarse auth checks) -> `3004`.
+8. CAP descriptor signature/trust-profile verification failure -> `3001`.
+9. Handoff semantic/request-shape conflicts -> `4001`.
+10. Handoff state/business failures -> `44xx`.
+11. CAP descriptor/schema artifact unavailable or integrity source unavailable -> `5002`.
+12. Transient backend failures -> `500x`.
 
 | Condition | Code | Name | Retry |
 |-----------|------|------|-------|
