@@ -34,7 +34,7 @@ Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validat
 
 | RFC | Title | Status | Author | Last Updated |
 |-----|-------|--------|--------|--------------|
-| 001 | [Agent Messaging Protocol (AMP Full Entry + Core Subset)](001-agent-messaging-protocol.md) | Draft v0.44 | Ryan Cooper, Jason Apple Huang | 2026-02-10 |
+| 001 | [Agent Messaging Protocol (AMP Full Entry + Core Subset)](001-agent-messaging-protocol.md) | Draft v0.45 | Ryan Cooper, Jason Apple Huang | 2026-02-22 |
 | 002 | [Transport Bindings (TCP-first, HTTP/WS mappings)](002-transport-bindings.md) | Draft v0.16 | Ryan Cooper, Nowa | 2026-02-07 |
 | 003 | [Relay & Store-and-Forward](003-relay-store-and-forward.md) | Draft v0.61 | Nowa | 2026-02-07 |
 | 004 | [Capability Schema Registry & Compatibility](004-capability-schema-registry.md) | Draft v0.12 | Ryan Cooper, Nowa | 2026-02-07 |
@@ -174,6 +174,8 @@ Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validat
 └─────────────────────┴───────────────────────────────────────────┘
 ```
 
+**Note**: RFC 001-003 (AMP Infrastructure) are designed as general-purpose agent communication infrastructure. RFC 004-011 define application semantics for the Agentries ecosystem. External projects MAY adopt RFC 001-003 and define their own application semantics using AMP's extension type code range (0x80-0xFF) and registry governance (RFC 001 §17).
+
 ## Design Principles
 
 1. **DID-Native**: Agentries DIDs as identity layer
@@ -182,6 +184,7 @@ Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validat
 4. **Agent-Native**: No human intermediation required
 5. **Binary-Efficient**: CBOR encoding for performance
 6. **Interoperable**: Optional bridges to A2A, MCP ecosystems
+7. **Extensible**: Domain-specific application protocols build on AMP Core via registered type codes and application profiles
 
 ## Contributing
 

@@ -75,6 +75,7 @@ Out of scope:
 - Relay pricing/settlement.
 - Relay reputation scoring.
 - Transport framing/auth details (RFC 002).
+- Topic-based publish/subscribe routing (candidate for future RFC).
 
 ---
 
@@ -99,6 +100,8 @@ The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, MAY, and OPTIONAL ar
 - MUST implement auditable custody transfer with explicit rollback on downstream acceptance timeout/failure.
 - MUST use RFC 002 relay-forward wrapper and transfer-receipt object for federation interoperability.
 - MUST support downstream commit feedback in dual-custody mode via commit-receipt.
+
+Future relay profiles (for example, topic-based publish/subscribe routing) MAY be defined in companion RFCs and MUST be additive to Relay Core Profile.
 
 ### 2.1 Terminology
 
@@ -693,4 +696,4 @@ Expected:
 
 ## Appendix B. Open Questions
 
-No open questions in this revision.
+1. **Topic/channel-based routing**: Should AMP relays support subscription-based message fanout in addition to DID-addressed delivery? If so, how should subscriptions interact with TTL, custody transfer, and federation semantics? (Candidate for future RFC.)

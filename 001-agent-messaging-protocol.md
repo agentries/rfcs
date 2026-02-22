@@ -3,8 +3,8 @@
 **Status**: Draft  
 **Authors**: Ryan Cooper, Jason Apple Huang  
 **Created**: 2026-02-04  
-**Updated**: 2026-02-10  
-**Version**: 0.44
+**Updated**: 2026-02-22
+**Version**: 0.45
 
 ---
 
@@ -15,6 +15,7 @@ This document is the AMP Full entry specification; AMP Core is a strict subset f
 
 **Core Positioning**:
 - **Goal**: Native messaging protocol for AI Agent ecosystem
+- **Architecture**: Layered — AMP Core (envelope, signing, transport, relay) is general-purpose infrastructure; application semantics are defined via message type codes and are extensible
 - **Features**: Binary, efficient, agent-to-agent communication, capability invocation, document/credential exchange
 - **Position**: Standalone protocol (not a DIDComm profile)
 
@@ -28,7 +29,7 @@ This document is the AMP Full entry specification; AMP Core is a strict subset f
 6. Document Exchange  
 7. Credential Exchange  
 8. Security Considerations  
-9. Agentries Integration (AMP Discovery)  
+9. Discovery & Contactability
 10. Presence & Status  
 11. Provisional Responses  
 12. Capability Namespacing & Versioning  
@@ -70,10 +71,14 @@ Existing communication infrastructure was designed for humans:
 
 ### 1.3 Problems AMP Solves
 
-- ❌ No standard protocol for agent-to-agent communication
+**Infrastructure (AMP Core)**:
+- ❌ No standard identity-verified agent-to-agent communication
+- ❌ No efficient binary format with deterministic signing
+- ❌ No transport-agnostic relay and store-and-forward model
+
+**Application semantics (AMP Full and extensions)**:
 - ❌ No native capability invocation mechanism
 - ❌ No standard delegation/authorization passing
-- ❌ No efficient binary format
 - ❌ No unified document/credential exchange
 
 **Scope Note**: This protocol supports:
@@ -81,6 +86,7 @@ Existing communication infrastructure was designed for humans:
 - Human-delegated agent messages
 - Agent capability invocation (RPC)
 - Document and credential exchange
+- Domain-specific application protocols via registered extension type codes (§17)
 
 ### 1.4 Normative Language
 
@@ -97,8 +103,9 @@ An implementation conforms to AMP Core if it satisfies all **MUST/REQUIRED** sta
 Support for capabilities, sessions, discovery, and other extensions is optional for AMP Core conformance; if implemented, those features MUST follow their respective RFCs (RFC 004/006/008).
 
 Conformance profiles:
-- `AMP Core`: Envelope/security/handshake/error/ack behavior defined in this RFC.
+- `AMP Core`: Envelope/security/handshake/error/ack behavior defined in this RFC. AMP Core is general-purpose infrastructure and does not mandate any application-layer message types.
 - `AMP Full`: AMP Core plus document/credential/delegation application flows in this RFC and companion RFCs.
+- `AMP Application Profile`: An external specification that builds on AMP Core by registering domain-specific message type codes (§17) and defining their flows, body schemas, and state machines. Application profiles are independent of AMP Full and MAY coexist with it.
 
 `AMP Full` delegated-execution baseline:
 - Implementations claiming delegated execution MUST support the delegation carriage model in Section 4.6 for `CAP_INVOKE`.
@@ -116,7 +123,7 @@ Conformance profiles:
 | §6 Document Exchange | Optional | MUST | Inline + streaming semantics |
 | §7 Credential Exchange | Optional | MUST | VC exchange semantics |
 | §8 Security Considerations | MUST | MUST | Signing/encryption/verification |
-| §9 Agentries Integration (AMP Discovery) | Optional | Optional | Semantics in RFC 008 |
+| §9 Discovery & Contactability | Optional | Optional | Semantics in RFC 008 |
 | §10 Presence & Status | Optional | Optional | Semantics in RFC 008 |
 | §11 Provisional Responses | Optional | MUST | Semantics in RFC 006 |
 | §12 Capability Namespacing & Versioning | Optional | MUST | Normative details in RFC 004 |
@@ -219,18 +226,19 @@ The requirements below describe the full AMP target. For strict `AMP Core` confo
 AMP adopts a message-centric three-layer architecture (inspired by MTProto):
 
 ```
-┌─────────────────────────────────────────┐
-│  Layer 3: Application Semantics         │
-│  (MESSAGE/REQUEST/RESPONSE, CAP_*,      │
-│   DOC_*, CRED_*, DELEG_*)               │
-├─────────────────────────────────────────┤
-│  Layer 2: AMP Message Core              │
-│  (Envelope, deterministic CBOR,         │
-│   signature/encryption, ACK/ERROR)      │
-├─────────────────────────────────────────┤
-│  Layer 1: Transport Bindings            │
-│  (HTTP, WebSocket, TCP, Relay/MQ)       │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│  Layer 3: Application Semantics                     │
+│  Core types: MESSAGE/REQUEST/RESPONSE, CAP_*,       │
+│    DOC_*, CRED_*, DELEG_* (0x00-0x7F)               │
+│  Extension types: domain-specific (0x80-0xFF, §17)  │
+├─────────────────────────────────────────────────────┤
+│  Layer 2: AMP Message Core                          │
+│  (Envelope, deterministic CBOR,                     │
+│   signature/encryption, ACK/ERROR)                  │
+├─────────────────────────────────────────────────────┤
+│  Layer 1: Transport Bindings                        │
+│  (HTTP, WebSocket, TCP, Relay/MQ)                   │
+└─────────────────────────────────────────────────────┘
 ```
 
 ### 3.1 Layer 1: Transport Bindings
@@ -257,7 +265,7 @@ Layer 2 is the protocol center and defines behavior independent of transport or 
 
 ### 3.3 Layer 3: Application Semantics
 
-Layer 3 maps message types to business meaning. These semantics are carried inside Layer 2 message bodies:
+Layer 3 maps message types to business meaning. These semantics are carried inside Layer 2 message bodies. Core types are defined in this RFC; domain-specific types are registered via §17.
 
 Message type categories:
 
@@ -269,6 +277,7 @@ Message type categories:
 | **Document** | DOC_SEND, DOC_REQUEST | Document exchange |
 | **Credential** | CRED_ISSUE, CRED_REQUEST, CRED_PRESENT, CRED_VERIFY | Credential exchange |
 | **Delegation** | DELEG_GRANT, DELEG_REVOKE, DELEG_QUERY | Delegation management |
+| **Extension** | 0x80-0xFF | Domain-specific application semantics (registered or experimental, see §17) |
 
 ### 3.4 Message Lifecycle
 
@@ -474,7 +483,14 @@ HELLO_REJECT      = 0x72    ; No compatible version found
 ; 0x73-0x7F reserved
 
 ; ═══════════════════════════════════════════════════════════════
-; EXTENSION (0xF0-0xFF) — Vendor/experimental extensions
+; STANDARD EXTENSION (0x80-0xEF) — Registered application types
+; ═══════════════════════════════════════════════════════════════
+; Reserved for domain-specific application protocols built on AMP.
+; Registration required via §17 process.
+; 0x80-0xEF available for registered standard extension types
+
+; ═══════════════════════════════════════════════════════════════
+; EXPERIMENTAL EXTENSION (0xF0-0xFF) — Vendor/experimental
 ; ═══════════════════════════════════════════════════════════════
 EXTENSION         = 0xF0    ; Extension message (see ext field)
 ; 0xF1-0xFF available for vendor/experimental extension types
@@ -1178,10 +1194,11 @@ To reduce cross-implementation ambiguity, key selection MUST follow these rules.
 
 ---
 
-## 9. Agentries Integration (AMP Discovery)
+## 9. Discovery & Contactability
 
 Discovery, contactability, and directory semantics are defined in **RFC 008**.
 This RFC reserves CONTACT and PRESENCE message types but does not specify discovery workflows.
+The Agentries ecosystem uses RFC 008 discovery mechanisms; other ecosystems MAY use the same DID service declaration patterns to integrate with AMP infrastructure.
 
 **Boundary Contract (Normative)**:
 - Implementations that emit CONTACT_* or PRESENCE_* messages MUST follow RFC 008 payload semantics.
@@ -1310,6 +1327,8 @@ SELECT
 
 ## 14. Interoperability
 
+### 14.1 A2A/MCP Bridges
+
 This section provides AMP interoperability guidance for A2A/MCP bridge implementations.
 
 **Boundary Contract (Normative)**:
@@ -1317,6 +1336,17 @@ This section provides AMP interoperability guidance for A2A/MCP bridge implement
 - Any bridge-level metadata MUST remain outside signed AMP fields unless explicitly modeled in body schemas.
 
 Discovery/contact/presence semantics remain in `008-agent-discovery-directory.md`.
+
+### 14.2 Building Domain Protocols on AMP
+
+External projects MAY define domain-specific application protocols on top of AMP Core. Such protocols:
+
+1. MUST use AMP Core envelope, signing, and transport semantics unchanged.
+2. SHOULD register domain message type codes in the standard extension range (0x80-0xEF) via §17 to avoid conflicts.
+3. MAY use the experimental range (0xF0-0xFF) for prototyping without registration.
+4. SHOULD document their message flows, body CDDL schemas, and state machines as an AMP Application Profile (see §1.5).
+5. MUST NOT redefine AMP Core behavior (envelope fields, signature verification, ACK/ERROR semantics).
+6. MAY coexist with AMP Full semantics — an agent can support both AMP Full and one or more application profiles simultaneously.
 
 ---
 
@@ -1535,6 +1565,7 @@ On no response within timeout:
 | Message Type Codes | 0x01-0xFF | AMP Specification |
 | Error Codes | 1001-5999 | AMP Specification |
 | Extension Fields | ext.vendor.* | Vendor |
+| Application Profiles | Domain-specific protocol definitions on AMP Core | AMP Specification |
 
 ### 17.2 Allocation Policy
 
@@ -1557,8 +1588,14 @@ On no response within timeout:
 3. Review by maintainers
 4. Merge into registry document
 
+**Application Profile registration** follows the same process with additional fields:
+1. Profile name (reverse-domain recommended, e.g., `com.example.knowledge.v1`)
+2. Required message type codes (from 0x80-0xEF range or 0xF0-0xFF experimental)
+3. Message flow descriptions and body CDDL schemas
+4. Dependency declaration (e.g., "requires AMP Core" or "requires AMP Core + RFC 003 relay")
+
 Scope note:
-- This process applies to AMP message type codes, error codes, and extension fields.
+- This process applies to AMP message type codes, error codes, extension fields, and application profiles.
 - Capability namespaces and capability version governance are defined in RFC 004 and do not require centralized registration in this process.
 
 ---
@@ -1970,3 +2007,4 @@ Versioning note: public version numbers were reset on 2026-02-06 for external pu
 | 2026-02-07 | 0.42 | 5.31 | Nowa | Added conformance suite publication location and governance requirements for Accepted/Implementation-Ready gate auditability |
 | 2026-02-07 | 0.43 | 5.32 | Nowa | Added batch and document MIME test vectors (`A.10`/`A.11`) to close R10/R19 gate coverage, added optional MIME diversity vector (`A.12`), and updated Full coverage matrix mapping |
 | 2026-02-10 | 0.44 | 5.33 | Nowa | Aligned interop gate profile naming to `amp-full-stack-001-011`, synchronized optional-extension scope to RFC 007-011, and updated full-stack coverage matrix vectors accordingly |
+| 2026-02-22 | 0.45 | 5.34 | Nowa | Clarified AMP as extensible layered infrastructure: added Application Profile concept to §1.5, separated infrastructure vs application problems in §1.3, added standard extension type code block in §4.3, added Extension row to §3.3, added §14.2 domain protocol guidance, added application profile registration to §17, renamed §9 from "Agentries Integration" to "Discovery & Contactability" |
