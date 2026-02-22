@@ -34,7 +34,7 @@ Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validat
 
 | RFC | Title | Status | Author | Last Updated |
 |-----|-------|--------|--------|--------------|
-| 001 | [Agent Messaging Protocol (AMP Full Entry + Core Subset)](001-agent-messaging-protocol.md) | Draft v0.45 | Ryan Cooper, Jason Apple Huang | 2026-02-22 |
+| 001 | [Agent Messaging Protocol (AMP Full Entry + Core Subset)](001-agent-messaging-protocol.md) | Draft v0.46 | Ryan Cooper, Jason Apple Huang | 2026-02-22 |
 | 002 | [Transport Bindings (TCP-first, HTTP/WS mappings)](002-transport-bindings.md) | Draft v0.16 | Ryan Cooper, Nowa | 2026-02-07 |
 | 003 | [Relay & Store-and-Forward](003-relay-store-and-forward.md) | Draft v0.61 | Nowa | 2026-02-07 |
 | 004 | [Capability Schema Registry & Compatibility](004-capability-schema-registry.md) | Draft v0.12 | Ryan Cooper, Nowa | 2026-02-07 |
@@ -45,6 +45,9 @@ Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validat
 | 009 | [Reputation & Trust Signals](009-reputation-trust-signals.md) | Draft v0.11 (session/CAP negative vectors + 3004 byte-level checks) | Nowa | 2026-02-10 |
 | 010 | [Observability & Evaluation Telemetry](010-observability-evaluation-telemetry.md) | Draft v0.5 | Nowa | 2026-02-10 |
 | 011 | [Multi-Agent Coordination & Group Messaging](011-multi-agent-coordination.md) | Draft v0.6 | Nowa | 2026-02-10 |
+| 012 | [Task Protocol](012-task-protocol.md) | Draft v0.1 | Nowa | 2026-02-22 |
+| 013 | [Negotiation Protocol](013-negotiation-protocol.md) | Draft v0.1 | Nowa | 2026-02-22 |
+| 014 | [Handoff Protocol](014-handoff-protocol.md) | Draft v0.1 | Nowa | 2026-02-22 |
 
 ## Supporting Documents
 
@@ -106,7 +109,7 @@ Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validat
 **Scope**:
 - Quote/authorize/capture/cancel/refund/status workflow semantics
 - Settlement-proof abstraction and deterministic verification/mapping
-- CAP interoperability profile (`org.agentries.payment.workflow:1.0.0`)
+- CAP interoperability profile (`xyz.agentries.payment.workflow:1.0.0`)
 - Chain/rail-specific settlement internals remain out of scope
 
 *Note: Draft v0.34 keeps RFC 004-aligned CAP behavior and further splits descriptor-integrity negatives into deterministic `3001`/`5002` vectors with minimal byte-level code checks.*
@@ -144,6 +147,40 @@ Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validat
 - Roles, handoffs, and conflict resolution
 - Coordination metadata patterns
 
+### RFC 012: Task Protocol
+**Problem**: Agents need persistent, queryable long-running task lifecycle management independent of sessions.
+
+**Scope**:
+- Task creation, acceptance, progress tracking, input collection, completion, failure, cancellation
+- Sub-task delegation and coordination
+- Persistent task state queryable across sessions
+- CAP interoperability profile (`xyz.agentries.task.workflow:1.0.0`)
+- Optional loose coupling with RFC 007 (payment) and RFC 013 (negotiation) via `payment_id`/`terms_id`
+
+*Note: First AMP Standard Profile RFC. Uses `typ=0x80` with profile-body dispatch (`xyz.agentries.*` namespace). Error codes in 42xx range.*
+
+### RFC 013: Negotiation Protocol
+**Problem**: Agents need structured multi-round agreement before committing to tasks, payments, or other interactions.
+
+**Scope**:
+- Multi-round propose/counter/accept/reject/withdraw semantics
+- Structured terms with expiry and round numbering
+- Stable `negotiation_id` referenceable from other protocols (RFC 007, RFC 012)
+- CAP interoperability profile (`xyz.agentries.negotiation.workflow:1.0.0`)
+
+*Note: AMP Standard Profile. Uses `typ=0x81` with profile-body dispatch. Error codes in 43xx range.*
+
+### RFC 014: Handoff Protocol
+**Problem**: Agents need structured responsibility transfer with context packaging, client notification, and optional veto.
+
+**Scope**:
+- Agent-to-agent handoff with three transfer modes (full, assist, escalate)
+- Context packaging with optional task snapshot (RFC 012) and conversation history
+- Client notification and optional veto mechanism
+- CAP interoperability profile (`xyz.agentries.handoff.workflow:1.0.0`)
+
+*Note: AMP Standard Profile. Uses `typ=0x82` with profile-body dispatch. Error codes in 44xx range.*
+
 ## Relationship to Agentries Core
 
 ```
@@ -161,7 +198,13 @@ Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validat
 │                     │  RFC 002 Transport Bindings               │
 │                     │  RFC 003 Relay & Store-and-Forward        │
 ├─────────────────────┴───────────────────────────────────────────┤
-│              Agentries Application Profile (AMP Full)            │
+│        AMP Standard Profiles (xyz.agentries.*)                    │
+├─────────────────────┬───────────────────────────────────────────┤
+│  Universal          │  RFC 012 Task Protocol (typ=0x80)         │
+│  Interactions       │  RFC 013 Negotiation Protocol (typ=0x81)  │
+│                     │  RFC 014 Handoff Protocol (typ=0x82)      │
+├─────────────────────┴───────────────────────────────────────────┤
+│        Agentries Application Profile (AMP Full, xyz.agentries.*) │
 ├─────────────────────┬───────────────────────────────────────────┤
 │  P1: Extensions     │  RFC 004 Capability Schema Registry       │
 │                     │  RFC 005 Delegation Credentials           │
@@ -176,7 +219,7 @@ Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validat
 └─────────────────────┴───────────────────────────────────────────┘
 ```
 
-**AMP Infrastructure** (RFC 001-003) is general-purpose agent communication infrastructure. Any project MAY adopt it and define domain-specific Standard or Private Profiles on top (see RFC 001 §1.5 and §17). **Agentries Application Profile** (RFC 004-011) is the built-in Standard Profile for the Agentries ecosystem and serves as the reference implementation of the profile pattern.
+**AMP Infrastructure** (RFC 001-003) is general-purpose agent communication infrastructure. Any project MAY adopt it and define domain-specific Standard or Private Profiles on top (see RFC 001 §1.5 and §17). **AMP Standard Profiles** (RFC 012-014) define universal interaction patterns (task, negotiation, handoff) using the `xyz.agentries.*` namespace and registered type codes. **Agentries Application Profile** (RFC 004-011) is the built-in application profile for the Agentries ecosystem using the `xyz.agentries.*` namespace.
 
 ## Design Principles
 

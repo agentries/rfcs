@@ -180,7 +180,7 @@ Scope dimensions:
 - `constraints`: key-value limits interpreted by verifier policy.
 
 MTI interoperability rules:
-- Each selector in `capabilities` MUST be an exact capability name (for example `org.agentries.code-review`) or exact capability ID (for example `org.agentries.code-review:2.1.0`).
+- Each selector in `capabilities` MUST be an exact capability name (for example `xyz.agentries.code-review`) or exact capability ID (for example `xyz.agentries.code-review:2.1.0`).
 - Wildcards (`*`), negation (`!x`), and regex-like patterns are NOT MTI and MUST be rejected with `3004`.
 - At least one of `capabilities`, `actions`, `resources` MUST be present.
 - Unknown constraint keys MUST be treated as unsupported policy input and MUST fail closed (`3004`) unless explicitly enabled by local profile policy.
@@ -622,7 +622,7 @@ Expected:
 ### A.9 Unsupported Selector Syntax Negative
 
 Input:
-- Scope uses wildcard `org.agentries.*` in MTI profile.
+- Scope uses wildcard `xyz.agentries.*` in MTI profile.
 
 Expected:
 - `3004 DELEGATION_INVALID`.

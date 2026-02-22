@@ -158,7 +158,7 @@ With RFC 003:
 With RFC 004:
 - Coordination endpoints MAY be exposed as capabilities.
 - If carried via `CAP_INVOKE`, capability negotiation and schema checks follow RFC 004.
-- CAP interoperability baseline capability ID for this RFC is `org.agentries.coordination.workflow:1.0.0` (Section 5.8).
+- CAP interoperability baseline capability ID for this RFC is `xyz.agentries.coordination.workflow:1.0.0` (Section 5.8).
 
 With RFC 005:
 - Delegation semantics remain governed by RFC 005.
@@ -510,7 +510,7 @@ coord-deliver-body = {
 ### 5.8 CAP-Exposed Coordination Profile Mapping
 
 Capability ID:
-- `org.agentries.coordination.workflow:1.0.0`
+- `xyz.agentries.coordination.workflow:1.0.0`
 
 Rules:
 - `CAP_INVOKE.params` MUST contain exactly one RFC 011 request body with `coord_v = 1`.
@@ -638,7 +638,7 @@ Required controls:
 - Enforce idempotency key (`actor_did`, `group_id`, `coord_msg_id`) semantics.
 - Implement monotonic `member_rev` and `group_seq` assignment.
 - Implement deterministic event query ordering and pagination.
-- Implement CAP mapping (`org.agentries.coordination.workflow:1.0.0`) and delegation error mapping (`3004`).
+- Implement CAP mapping (`xyz.agentries.coordination.workflow:1.0.0`) and delegation error mapping (`3004`).
 - Implement RFC 006 session-context validation for session-scoped operations.
 
 ---
@@ -758,7 +758,7 @@ Expected:
 ### A.11 CAP Coordination Profile Positive
 
 Input:
-- `CAP_INVOKE` targets `id = org.agentries.coordination.workflow:1.0.0`.
+- `CAP_INVOKE` targets `id = xyz.agentries.coordination.workflow:1.0.0`.
 - `CAP_INVOKE.params` contains valid RFC 011 request body.
 
 Expected:

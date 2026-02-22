@@ -98,8 +98,8 @@ An implementation is conformant only if it:
 
 | Term | Definition |
 |------|------------|
-| Capability Name | Stable symbolic name, e.g. `org.agentries.code-review`. |
-| Capability ID | Name plus concrete version, e.g. `org.agentries.code-review:2.1.0`. |
+| Capability Name | Stable symbolic name, e.g. `xyz.agentries.code-review`. |
+| Capability ID | Name plus concrete version, e.g. `xyz.agentries.code-review:2.1.0`. |
 | Schema Descriptor | Metadata describing versioned input/output contract and compatibility claims. |
 | Registry Source | Location that serves schema descriptors and schema documents. |
 | Negotiated Version | Concrete version chosen for one invocation/session path. |
@@ -178,8 +178,8 @@ capability-id   = <capability-name> ":" <semver>
 ```
 
 Examples:
-- `org.agentries.code-review`
-- `org.agentries.code-review:2.1.0`
+- `xyz.agentries.code-review`
+- `xyz.agentries.code-review:2.1.0`
 - `com.acme.risk-evaluator:1.4.2`
 
 Rules:
@@ -688,7 +688,7 @@ Capability lifecycle guidance:
 ### A.1 CAP_DECLARE Positive
 
 Input:
-- `CAP_DECLARE` with one descriptor `org.agentries.code-review:2.1.0`
+- `CAP_DECLARE` with one descriptor `xyz.agentries.code-review:2.1.0`
 - Descriptor `id == name:version`
 - Valid input/output schema hashes
 
@@ -751,8 +751,8 @@ Expected:
 ### A.8 Identity Mismatch Negative
 
 Input:
-- `CAP_INVOKE` includes `id=org.agentries.code-review:2.1.0`
-- Also includes `capability=org.agentries.translate`, `version=1.0.0`
+- `CAP_INVOKE` includes `id=xyz.agentries.code-review:2.1.0`
+- Also includes `capability=xyz.agentries.translate`, `version=1.0.0`
 
 Expected:
 - `4001 BAD_REQUEST`
@@ -830,7 +830,7 @@ Expected:
 ### A.17 CAP_QUERY No-Match Mapping Negative
 
 Input:
-- `CAP_QUERY.filter.capability = org.agentries.nonexistent`
+- `CAP_QUERY.filter.capability = xyz.agentries.nonexistent`
 
 Expected:
 - `4002 CAPABILITY_NOT_FOUND`

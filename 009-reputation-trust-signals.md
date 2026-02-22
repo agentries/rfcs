@@ -157,7 +157,7 @@ With RFC 003:
 With RFC 004:
 - Reputation endpoints MAY be exposed as capabilities.
 - If carried via `CAP_INVOKE`, capability negotiation and schema checks follow RFC 004.
-- CAP interoperability baseline capability ID for this RFC is `org.agentries.reputation.workflow:1.0.0` (Section 5.8).
+- CAP interoperability baseline capability ID for this RFC is `xyz.agentries.reputation.workflow:1.0.0` (Section 5.8).
 
 With RFC 005:
 - Delegation credential semantics remain governed by RFC 005.
@@ -251,7 +251,7 @@ reputation-event = {
 - `submit-attestation.submit_envelope` size MUST be `<= 8192` bytes; oversized envelopes MUST be rejected with `4001`.
 - `submit-attestation.submit_envelope` MUST decode to a signed AMP envelope that is either:
   - Direct profile submit: `typ=REQUEST`, `body.rep_v=1`, and `body.op=signal_submit`; or
-  - CAP-exposed profile submit: outer dispatch via RFC 004 (`CAP_INVOKE`) targeting `id = org.agentries.reputation.workflow:1.0.0`, where `CAP_INVOKE.params` contains `rep_v=1` and `op=signal_submit`.
+  - CAP-exposed profile submit: outer dispatch via RFC 004 (`CAP_INVOKE`) targeting `id = xyz.agentries.reputation.workflow:1.0.0`, where `CAP_INVOKE.params` contains `rep_v=1` and `op=signal_submit`.
 - The resolved submit payload `event` MUST be byte-equivalent to the stored/reported event object.
 - In public-query profile responses, `submit-attestation.submit_envelope` MUST be `null` while preserving the same `hash_alg/hash` values from the self-query attestation.
 
@@ -500,7 +500,7 @@ dispute-resolve-result-body = {
   ? "session": rep-session-context
 }
 
-rep-capability-id = "org.agentries.reputation.workflow:1.0.0"
+rep-capability-id = "xyz.agentries.reputation.workflow:1.0.0"
 
 rep-cap-invoke-params =
   signal-submit-body /
@@ -522,7 +522,7 @@ rep-cap-result-success =
 This section defines RFC 009 capability interoperability baseline for RFC 004 invocation path.
 
 Capability identity:
-- `id = "org.agentries.reputation.workflow:1.0.0"`.
+- `id = "xyz.agentries.reputation.workflow:1.0.0"`.
 
 Rules:
 - CAP path MUST target capability ID above.
@@ -532,7 +532,7 @@ Rules:
 - If `CAP_INVOKE.body.delegation` is present, validation MUST follow RFC 005 before reputation execution.
 - Invalid/unsupported delegation evidence in CAP path MUST fail with `3004` (RFC 004/005).
 - Section 5.1 Direct `REQUEST`/`RESPONSE` direction rules MUST NOT be applied to CAP envelope types.
-- Providers supporting CAP path MUST publish an RFC 004-compliant descriptor for `org.agentries.reputation.workflow:1.0.0`.
+- Providers supporting CAP path MUST publish an RFC 004-compliant descriptor for `xyz.agentries.reputation.workflow:1.0.0`.
 - Session context source-of-truth in CAP path is RFC 004 envelope extension (`CAP_INVOKE.body.session`, `CAP_RESULT.body.session`) with semantics governed by RFC 006.
 - `CAP_INVOKE.params.session` and `CAP_RESULT.result.session` MAY exist for payload-level compatibility, but if both payload and envelope session context are present, they MUST be semantically equivalent; mismatch MUST fail with `4001`.
 - Pre-execution rejection in CAP path (validation/authorization/compatibility/schema) MUST return AMP `ERROR` per RFC 004 Section 7.2.
@@ -871,7 +871,7 @@ Expected:
 ### A.20 CAP Reputation Profile Positive
 
 Input:
-- `CAP_INVOKE` targets `id = org.agentries.reputation.workflow:1.0.0`.
+- `CAP_INVOKE` targets `id = xyz.agentries.reputation.workflow:1.0.0`.
 - `CAP_INVOKE.params` contains valid RFC 009 `signal_submit` body (`rep_v=1`).
 
 Expected:
@@ -901,7 +901,7 @@ Expected:
 ### A.23 CAP Delegation Evidence Invalid Negative
 
 Input:
-- `CAP_INVOKE` targets `id = org.agentries.reputation.workflow:1.0.0`.
+- `CAP_INVOKE` targets `id = xyz.agentries.reputation.workflow:1.0.0`.
 - `CAP_INVOKE.body.delegation` is present but invalid/unsupported under RFC 005 validation.
 
 Expected:

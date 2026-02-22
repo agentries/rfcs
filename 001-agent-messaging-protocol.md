@@ -4,7 +4,7 @@
 **Authors**: Ryan Cooper, Jason Apple Huang  
 **Created**: 2026-02-04  
 **Updated**: 2026-02-22
-**Version**: 0.45
+**Version**: 0.46
 
 ---
 
@@ -672,11 +672,22 @@ hello-body = {
 profile-descriptor = {
   "name": tstr,              ; profile name (e.g., "lineage.knowledge")
   "version": semver,         ; supported profile version
-  ? "typ": uint              ; registered type code (Standard Profiles only; omit for Private)
+  ? "typ": uint,             ; registered type code (Standard Profiles only; omit for Private)
+  ? "version_range": tstr,   ; semver range string (e.g., ">=1.0.0 <2.0.0"); see §13.3
+  ? "required": bool,        ; true = sender will not proceed without this profile (default false)
+  ? "depends": [+ tstr]      ; profile names this profile depends on (e.g., ["org.amp.task"])
 }
 
 hello-ack-body = {
-  "selected": semver
+  "selected": semver,
+  ? "profile_status": [* profile-match]  ; per-profile negotiation result (see §13.3)
+}
+
+profile-match = {
+  "name": tstr,              ; profile name from HELLO request
+  "matched": bool,           ; true if profile negotiation succeeded
+  ? "selected_version": semver,  ; version selected (present when matched=true)
+  ? "typ": uint              ; agreed type code for this profile (present when matched=true)
 }
 
 hello-reject-body = {
@@ -1346,10 +1357,25 @@ HELLO_REJECT    = 0x72    ; No compatible version
 
 **Profile negotiation**: `profiles` is OPTIONAL. If present, peers SHOULD use the intersection of declared profiles to determine compatible application semantics. An empty intersection does not prevent AMP Core communication — it only indicates no shared application profiles.
 
+**Extended profile descriptor fields** (all OPTIONAL, backward-compatible):
+- `version_range`: A semver range string (e.g., `">=1.0.0 <2.0.0"`) indicating all acceptable versions. When present, `version` is the preferred version within the range. When absent, only the exact `version` is offered.
+- `required`: When `true`, the sender considers this profile essential and will reject the connection if the peer cannot match it. Default is `false`.
+- `depends`: A list of profile names that this profile depends on. The responder SHOULD verify that all listed dependencies are also matched before confirming this profile.
+
 **`typ` selection rule**: When sending a profile message, the sender MUST choose `typ` based on the peer's HELLO declaration:
 - If the peer declared the profile with a `typ` field → use that registered type code.
 - If the peer declared the profile without `typ`, or no HELLO was exchanged → use `0xF0` (Private Profile).
 - Receivers supporting a Standard Profile MUST accept messages for that profile via either its registered `typ` OR `typ = 0xF0` with matching `body.profile`. This dual-accept rule enables non-breaking migration from Private to Standard (see §14.2).
+
+**Profile matching algorithm**: When processing HELLO `profiles`, the responder MUST apply the following steps for each initiator profile descriptor:
+
+1. **Name lookup**: Find the profile by `name` in the responder's supported profile set. If not found, set `matched = false`.
+2. **Version intersection**: If the initiator provides `version_range`, compute the intersection of the initiator's range with the responder's supported version set. If no intersection exists, set `matched = false`. If the initiator provides only `version`, the responder MUST match if it supports any version with the same major version (semver-compatible). The `selected_version` is the highest mutually supported version.
+3. **Dependency check**: If the initiator's descriptor includes `depends`, verify that every listed profile name is also matched (from this same HELLO negotiation). If any dependency is unmatched, set `matched = false`.
+4. **Type code agreement**: If both sides declare `typ` for the profile, they MUST agree. If only one side declares `typ`, the declared value is used. If neither declares `typ`, the profile uses `0xF0`. The agreed `typ` is returned in `profile_status`.
+5. **Required-profile enforcement**: After all profiles are evaluated, if any descriptor with `required = true` has `matched = false`, the responder MUST send `HELLO_REJECT` with reason indicating the unsatisfied required profile(s).
+
+**`profile_status` in HELLO_ACK**: When the responder supports profile negotiation, HELLO_ACK SHOULD include `profile_status` with one `profile-match` entry per initiator profile. This allows the initiator to confirm which profiles are active and at which versions. If `profile_status` is absent, the initiator MUST fall back to intersection-based discovery (pre-v0.46 behavior).
 
 ### 13.4 Backward Compatibility
 
@@ -2097,3 +2123,4 @@ Versioning note: public version numbers were reset on 2026-02-06 for external pu
 | 2026-02-07 | 0.43 | 5.32 | Nowa | Added batch and document MIME test vectors (`A.10`/`A.11`) to close R10/R19 gate coverage, added optional MIME diversity vector (`A.12`), and updated Full coverage matrix mapping |
 | 2026-02-10 | 0.44 | 5.33 | Nowa | Aligned interop gate profile naming to `amp-full-stack-001-011`, synchronized optional-extension scope to RFC 007-011, and updated full-stack coverage matrix vectors accordingly |
 | 2026-02-22 | 0.45 | 5.34 | Nowa | Defined three-tier conformance model (Core / Standard Profile / Private Profile) with 5 normative extensibility rules in §1.5. Introduced one-code-per-profile type allocation (0x80-0xEF Standard, 0xF0 Private) with `body.action` dispatch in §4.3. Unified profile body CDDL (`profile-body`): both Standard and Private carry `body.profile` for self-description, debugging, and dual-stack migration. Added `profile-descriptor` with optional `typ` field to HELLO CDDL; defined typ selection rule and dual-accept migration in §13.3. Added §14.2.1 Private-to-Standard migration protocol (HELLO-negotiated, non-breaking). Added profile error codes (4005 UNKNOWN_PROFILE, 4006 PROFILE_VERSION_UNSUPPORTED) to §15.3. Updated §17 with Standard Profile registration requirements. Renamed §9 to "Discovery & Contactability". Separated infrastructure vs application problems in §1.3. |
+| 2026-02-22 | 0.46 | 5.35 | Nowa | Enhanced HELLO profile negotiation: added `version_range`, `required`, and `depends` fields to `profile-descriptor` CDDL; added `profile_status` with `profile-match` entries to `hello-ack-body` CDDL; added normative profile matching algorithm in §13.3 (version intersection, dependency checking, required-profile enforcement, type code agreement). All new fields are optional for backward compatibility with v0.45. |

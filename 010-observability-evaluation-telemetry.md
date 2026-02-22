@@ -156,7 +156,7 @@ With RFC 003:
 With RFC 004:
 - Telemetry endpoints MAY be exposed as capabilities.
 - If carried via `CAP_INVOKE`, capability negotiation and schema checks follow RFC 004.
-- CAP interoperability baseline capability ID for this RFC is `org.agentries.telemetry.workflow:1.0.0` (Section 5.8).
+- CAP interoperability baseline capability ID for this RFC is `xyz.agentries.telemetry.workflow:1.0.0` (Section 5.8).
 
 With RFC 005:
 - Delegation semantics remain governed by RFC 005.
@@ -480,7 +480,7 @@ eval-query-result-body = {
   ? "session": telemetry-session-context
 }
 
-tel-capability-id = "org.agentries.telemetry.workflow:1.0.0"
+tel-capability-id = "xyz.agentries.telemetry.workflow:1.0.0"
 
 tel-cap-invoke-params =
   telemetry-submit-body /
@@ -502,7 +502,7 @@ tel-cap-result-success =
 This section defines RFC 010 capability interoperability baseline for RFC 004 invocation path.
 
 Capability identity:
-- `id = "org.agentries.telemetry.workflow:1.0.0"`.
+- `id = "xyz.agentries.telemetry.workflow:1.0.0"`.
 
 Rules:
 - CAP path MUST target capability ID above.
@@ -512,7 +512,7 @@ Rules:
 - If `CAP_INVOKE.body.delegation` is present, validation MUST follow RFC 005.
 - Invalid/unsupported delegation evidence in CAP path MUST fail with `3004`.
 - Direct profile `REQUEST`/`RESPONSE` direction rules MUST NOT be applied to CAP envelope types.
-- Providers supporting CAP path MUST publish an RFC 004-compliant descriptor for `org.agentries.telemetry.workflow:1.0.0`.
+- Providers supporting CAP path MUST publish an RFC 004-compliant descriptor for `xyz.agentries.telemetry.workflow:1.0.0`.
 - Session context source-of-truth in CAP path is RFC 004 envelope extension (`CAP_INVOKE.body.session`, `CAP_RESULT.body.session`) with semantics governed by RFC 006.
 - `CAP_INVOKE.params.session` and `CAP_RESULT.result.session` MAY exist for payload-level compatibility, but if both payload and envelope session context are present, they MUST be semantically equivalent; mismatch MUST fail with `4001`.
 - Pre-execution rejection in CAP path MUST return AMP `ERROR` per RFC 004 Section 7.2.
@@ -750,7 +750,7 @@ Expected:
 ### A.11 CAP Telemetry Profile Positive
 
 Input:
-- `CAP_INVOKE` targets `id = org.agentries.telemetry.workflow:1.0.0`.
+- `CAP_INVOKE` targets `id = xyz.agentries.telemetry.workflow:1.0.0`.
 - `CAP_INVOKE.params` contains valid RFC 010 submit/query body.
 
 Expected:

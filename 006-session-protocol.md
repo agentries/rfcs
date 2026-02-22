@@ -720,7 +720,7 @@ Expected:
 ### A.7 Capability Pin Preservation Positive
 
 Input:
-- Session has pinned `org.agentries.code-review:2.1.0`, then resume.
+- Session has pinned `xyz.agentries.code-review:2.1.0`, then resume.
 
 Expected:
 - Pinned capability remains unchanged after recovery.

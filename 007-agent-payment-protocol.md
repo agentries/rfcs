@@ -152,7 +152,7 @@ With RFC 003:
 With RFC 004:
 - Payment services MAY be exposed as capabilities.
 - If payment operations are carried via `CAP_INVOKE`, capability/version negotiation follows RFC 004.
-- CAP interop baseline for this RFC is `org.agentries.payment.workflow:1.0.0` (Section 5.10).
+- CAP interop baseline for this RFC is `xyz.agentries.payment.workflow:1.0.0` (Section 5.10).
 
 With RFC 005:
 - This revision does not define delegation carriage inside payment-control bodies.
@@ -340,7 +340,7 @@ Rules:
 This section defines the RFC 007 capability interoperability baseline for RFC 004 invocation path.
 
 Capability identity:
-- `id = "org.agentries.payment.workflow:1.0.0"`.
+- `id = "xyz.agentries.payment.workflow:1.0.0"`.
 
 Rules:
 - When using CAP path, `CAP_INVOKE` MUST target the capability ID above.
@@ -350,7 +350,7 @@ Rules:
 - If `CAP_INVOKE.body.delegation` is present, validation MUST follow RFC 005 before payment execution.
 - Invalid/unsupported delegation evidence in CAP payment path MUST fail with `3004` (RFC 004/005).
 - Section 5.8 payment-control `REQUEST`/`RESPONSE` direction rules MUST NOT be applied to CAP envelope types.
-- Providers supporting this capability MUST publish an RFC 004-compliant descriptor for `org.agentries.payment.workflow:1.0.0`.
+- Providers supporting this capability MUST publish an RFC 004-compliant descriptor for `xyz.agentries.payment.workflow:1.0.0`.
 - Descriptor/schema integrity verification (hash/signature/trust profile behavior) MUST follow RFC 004 Sections 4.2 and 5.2 before schema validation/execution.
 - Descriptor input schema MUST correspond to `app-cap-invoke-params`; success result schema MUST correspond to `app-cap-result-success`.
 - Session context source-of-truth in CAP path is RFC 004 envelope extension (`CAP_INVOKE.body.session`, `CAP_RESULT.body.session`) with semantics governed by RFC 006.
@@ -465,7 +465,7 @@ status-body = {
   ? "updated_at": unix-ms
 }
 
-app-capability-id = "org.agentries.payment.workflow:1.0.0"
+app-capability-id = "xyz.agentries.payment.workflow:1.0.0"
 
 app-cap-invoke-params =
   quote-request-body /
@@ -767,7 +767,7 @@ Expected:
 ### A.14 CAP_INVOKE Payment Profile Positive
 
 Input:
-- `CAP_INVOKE` by `id = org.agentries.payment.workflow:1.0.0` with `params = authorize-body`.
+- `CAP_INVOKE` by `id = xyz.agentries.payment.workflow:1.0.0` with `params = authorize-body`.
 
 Expected:
 - RFC 004 capability negotiation/validation passes.
@@ -793,7 +793,7 @@ Expected:
 ### A.17a CAP Descriptor Signature Invalid Negative
 
 Input:
-- Capability ID matches `org.agentries.payment.workflow:1.0.0`.
+- Capability ID matches `xyz.agentries.payment.workflow:1.0.0`.
 - Active trust profile requires descriptor signature.
 - Descriptor signature is missing or invalid.
 
@@ -804,7 +804,7 @@ Expected:
 ### A.17b CAP Descriptor Artifact Unavailable Negative
 
 Input:
-- Capability ID matches `org.agentries.payment.workflow:1.0.0`.
+- Capability ID matches `xyz.agentries.payment.workflow:1.0.0`.
 - Descriptor/schema artifact is missing, unreadable, or integrity source is unavailable.
 
 Expected:
