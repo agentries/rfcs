@@ -161,7 +161,7 @@ Status transition requirement for `AMP Full`:
 - `amp-full-core-001-006` is the default `AMP Full` gate profile in this revision.
 - `amp-full-stack-001-011` is an additional full-stack profile that promotes selected RFC 007/008/009/010/011 vectors to required.
 - For `amp-full-core-001-006`, RFC 007/008/009/010/011 remain optional extensions and are not required for gate pass.
-- **Standard Profile gate** (`amp-standard-profiles-012-014`): A separate conformance gate for AMP Standard Profiles (RFC 012-014) will be defined once these specifications stabilize beyond initial Draft. Until then, Standard Profile vectors are not included in AMP Full gate profiles. Each Standard Profile MUST define its own required test vectors in its respective RFC.
+- **Standard Profile gate** (`amp-standard-profiles-012-014`): A separate conformance gate for AMP Standard Profiles (RFC 012-014) is defined in `conformance/amp-standard-profiles-012-014-draft-v1/`. Standard Profile vectors are not included in AMP Full gate profiles. Each Standard Profile MUST define its own required test vectors in its respective RFC.
 - The canonical suite artifact set MUST be published in the AMP specification repository under a stable versioned location (for example `conformance/<suite_version>/`).
 - Each candidate implementation MUST publish a machine-readable report (for example `interop-report.json`) including at least:
   - implementation identifier and version;

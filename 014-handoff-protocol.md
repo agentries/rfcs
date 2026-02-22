@@ -370,9 +370,7 @@ Processing rules:
 
 ### 5.5 Complete Flow
 
-Either the source or the target sends `action: "complete"` to signal that the handoff work is done.
-
-Completion sender depends on transfer mode (normative):
+The allowed sender of `action: "complete"` depends on the transfer mode:
 - `full` mode: Target MUST send `complete` to source. Source MUST NOT send `complete`.
 - `assist` mode: Either party MAY send `complete`. Target sends `complete` to return control; source sends `complete` to acknowledge that the assist is finished.
 - `escalate` mode: Target MUST send `complete` to source. Source MUST NOT send `complete`.
@@ -389,7 +387,7 @@ Processing rules:
 
 ### 5.5a Fail Flow
 
-The source or target sends `action: "fail"` to signal that the handoff cannot be completed due to an error during execution.
+The allowed sender of `action: "fail"` depends on the transfer mode (see below). A `fail` signals that the handoff cannot be completed due to an error during execution.
 
 Fail body MUST include:
 - `error_code`: Numeric error code indicating the failure reason.
@@ -401,7 +399,7 @@ Fail body MAY include:
 Processing rules:
 - `fail` is valid only from `ACCEPTED` state. Fail from other states MUST be rejected with `4402 INVALID_STATE_TRANSITION`.
 - Upon failure, handoff state transitions to `FAILED` (terminal).
-- Fail sender depends on transfer mode (normative):
+- Fail sender by transfer mode (normative):
   - `full` mode: Target MUST send `fail` to source. Source MUST NOT send `fail`.
   - `assist` mode: Source MUST send `fail` to target. Target MUST NOT send `fail`.
   - `escalate` mode: Target MUST send `fail` to source. Source MUST NOT send `fail`.
