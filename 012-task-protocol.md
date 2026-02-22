@@ -21,7 +21,7 @@
 - RFC 006: Session Protocol (transient provisional responses vs persistent task state)
 - RFC 007: Agent Payment Protocol (optional payment linkage)
 - RFC 013: Negotiation Protocol (optional terms linkage)
-- RFC 014: Context Handoff Protocol (optional task snapshot handoff)
+- RFC 014: Handoff Protocol (optional task snapshot handoff)
 
 ---
 
@@ -298,10 +298,10 @@ task-base = {
 
 Task messages use the profile-body format defined in RFC 001 Section 4.3. Dispatch rules:
 
-- Task messages MUST use `typ = 0x80` (Standard Profile).
-- Receivers MUST also accept task messages via `typ = 0xF0` (Private Profile) with `body.profile = "xyz.agentries.task"` (dual-accept per RFC 001 Section 13.3).
-- A message is task-protocol only when `typ` is `0x80` or `0xF0`, and the signed body contains `"profile": "xyz.agentries.task"`.
-- Messages with `typ = 0x80` but `body.profile` not equal to `"xyz.agentries.task"` MUST be rejected with `4001 BAD_REQUEST` (profile/typ mismatch, or dispatched to the correct profile handler if the receiver supports multiple Standard Profiles on different type codes).
+- Task messages MUST use `typ = 0x80` when the peer declared this profile with `typ` in HELLO negotiation. If the peer did not declare `typ`, or no HELLO was exchanged, the sender MUST use `typ = 0xF0` with `body.profile = "xyz.agentries.task"` (per RFC 001 Section 13.3 typ selection rule).
+- Receivers supporting this profile MUST accept messages via either `typ = 0x80` OR `typ = 0xF0` with matching `body.profile = "xyz.agentries.task"` (dual-accept per RFC 001 Section 13.3).
+- A message is task-protocol only when `typ` is `0x80` or (`typ` is `0xF0` and the signed body contains `"profile": "xyz.agentries.task"`).
+- Messages with `typ = 0x80` but `body.profile` not equal to `"xyz.agentries.task"` MUST be rejected with `4001 BAD_REQUEST`.
 - `action` and `task_id` are REQUIRED in every task body; missing or invalid fields MUST be rejected with `1001 INVALID_MESSAGE`.
 - Unknown `action` values MUST be rejected with `4205 UNKNOWN_TASK_ACTION`.
 - `profile_v` MUST be `"1.0.0"` for this version of the protocol. Unsupported `profile_v` values MUST be rejected with `4006 PROFILE_VERSION_UNSUPPORTED`.
@@ -890,7 +890,7 @@ Compatibility rules:
 - RFC 006: Session Protocol
 - RFC 007: Agent Payment Protocol
 - RFC 013: Negotiation Protocol
-- RFC 014: Context Handoff Protocol
+- RFC 014: Handoff Protocol
 
 ---
 

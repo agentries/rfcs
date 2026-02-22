@@ -259,8 +259,8 @@ Notes:
 
 ### 5.1 Message Type Usage and Dispatch
 
-- Negotiation messages MUST use `typ = 0x81` (registered Standard Profile type code).
-- Receivers MUST also accept `typ = 0xF0` with `body.profile = "xyz.agentries.negotiation"` (dual-accept rule per RFC 001 Section 13.3).
+- Negotiation messages MUST use `typ = 0x81` when the peer declared this profile with `typ` in HELLO negotiation. If the peer did not declare `typ`, or no HELLO was exchanged, the sender MUST use `typ = 0xF0` with `body.profile = "xyz.agentries.negotiation"` (per RFC 001 Section 13.3 typ selection rule).
+- Receivers supporting this profile MUST accept messages via either `typ = 0x81` OR `typ = 0xF0` with matching `body.profile = "xyz.agentries.negotiation"` (dual-accept rule per RFC 001 Section 13.3).
 - A message is treated as a negotiation message only when `typ` is `0x81` or (`typ` is `0xF0` and signed body contains `"profile": "xyz.agentries.negotiation"`).
 - For negotiation messages, `action` and `negotiation_id` are REQUIRED; missing or invalid fields MUST be rejected as `1001`.
 - `body.profile` MUST be `"xyz.agentries.negotiation"`. Mismatch between `typ = 0x81` and a different `body.profile` value MUST be rejected with `4001`.

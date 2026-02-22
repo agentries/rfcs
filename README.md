@@ -30,6 +30,8 @@ In this cycle, a failing `Accepted` gate check is expected and does not block RF
 Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validate-design-requirements.sh conformance/2026-02-07-draft-v1/reports`.
 `Accepted/Implementation-Ready` is deferred until the conformance suite includes at least two independent `full-stack-pass` reports under `conformance/2026-02-07-draft-v1/reports`.
 
+**RFC 012-014 (Standard Profiles)**: These RFCs are at initial Draft (v0.1) and are NOT yet included in the conformance gate. A separate gate profile (e.g., `amp-standard-profiles-012-014`) will be defined once these specifications stabilize beyond initial draft.
+
 ## Current RFCs
 
 | RFC | Title | Status | Author | Last Updated |
@@ -219,7 +221,7 @@ Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validat
 └─────────────────────┴───────────────────────────────────────────┘
 ```
 
-**AMP Infrastructure** (RFC 001-003) is general-purpose agent communication infrastructure. Any project MAY adopt it and define domain-specific Standard or Private Profiles on top (see RFC 001 §1.5 and §17). **AMP Standard Profiles** (RFC 012-014) define universal interaction patterns (task, negotiation, handoff) using the `xyz.agentries.*` namespace and registered type codes. **Agentries Application Profile** (RFC 004-011) is the built-in application profile for the Agentries ecosystem using the `xyz.agentries.*` namespace.
+**AMP Infrastructure** (RFC 001-003) is general-purpose agent communication infrastructure. Any project MAY adopt it and define domain-specific Standard or Private Profiles on top (see RFC 001 §1.5 and §17). **AMP Standard Profiles** (RFC 012-014) define common interaction patterns (task, negotiation, handoff) using registered type codes. These profiles use the `xyz.agentries.*` namespace as the initial registrant; other ecosystems MAY adopt them or register alternative Standard Profiles under their own namespaces via §17. **Agentries Application Profile** (RFC 004-011) is the built-in application profile for the Agentries ecosystem using the `xyz.agentries.*` namespace.
 
 ## Design Principles
 

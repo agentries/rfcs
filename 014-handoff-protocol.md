@@ -20,7 +20,7 @@
 - RFC 005: Delegation Credentials and Authorization (delegated handoff execution)
 - RFC 006: Session Protocol (optional session migration on handoff)
 - RFC 007: Agent Payment Protocol (handoff terms may reference payment)
-- RFC 012: Task Lifecycle (optional task snapshot in context package)
+- RFC 012: Task Protocol (optional task snapshot in context package)
 - RFC 013: Negotiation Protocol (handoff terms may reference negotiation)
 
 ---
@@ -721,7 +721,7 @@ HELLO negotiation:
   {"name": "xyz.agentries.handoff", "version": "1.0.0", "typ": 130}
   ```
   (where `130` is `0x82` in decimal).
-- Peers that do not support the handoff profile will not include it in `profile_status`, and senders MUST fall back to `typ = 0xF0` for those peers.
+- If the peer declared this profile in HELLO but without a `typ` field, or no HELLO was exchanged, the sender MUST fall back to `typ = 0xF0`. If the peer's HELLO or `profile_status` indicates no support for this profile, sending handoff messages to that peer will fail regardless of `typ` used.
 
 ---
 
@@ -786,7 +786,7 @@ HELLO negotiation:
 - RFC 007: Agent Payment Protocol
 - RFC 008: Agent Discovery and Directory
 - RFC 009: Reputation and Trust Signals
-- RFC 012: Task Lifecycle
+- RFC 012: Task Protocol
 - RFC 013: Negotiation Protocol
 
 ---

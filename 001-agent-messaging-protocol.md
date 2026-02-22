@@ -108,7 +108,9 @@ Conformance tiers:
    Envelope/security/handshake/error/ack behavior defined in this RFC. AMP Core is general-purpose infrastructure and guarantees that any conformant implementation can send, receive, verify, route, and store-forward AMP messages regardless of application domain. AMP Core does not mandate any application-layer message types.
 
 2. **AMP Standard Profiles** (semantic interoperability promise):
-   Application-level protocols built on AMP Core that go through registration and version governance (§17). Each Standard Profile gets one registered type code in `0x80-0xEF` and defines its own action vocabulary, body schemas, message flows, and security requirements. `AMP Full` (§5-§7, §11-§12, and companion RFCs 004-011) is the built-in Standard Profile for the Agentries ecosystem.
+   Extension protocols built on AMP Core that go through registration and version governance (§17). Each Standard Profile gets one registered type code in `0x80-0xEF` and defines its own action vocabulary, body schemas, message flows, and security requirements. Standard Profiles use the `profile-body` format (§4.3) with fine-grained actions in `body.action`. RFC 012-014 are the first Standard Profiles.
+
+   **AMP Full** (§5-§7, §11-§12, and companion RFCs 004-011) is the Agentries **Application Profile** — a suite of application semantics that uses AMP Core type codes in the `0x00-0x7F` range (CAP_*, DOC_*, CRED_*, DELEG_*, REQUEST/RESPONSE, provisionals). AMP Full is NOT a Standard Profile in the one-code-per-profile sense; it is a built-in extension of AMP Core's application layer for the Agentries ecosystem.
 
 3. **AMP Private Profiles** (no interoperability promise):
    Experimental or vendor-specific protocols using `typ = 0xF0`. Private Profiles MUST NOT break AMP Core semantics but carry no cross-project interoperability guarantee. Private Profiles MAY graduate to Standard Profiles via the registration process and HELLO-negotiated migration (see §14.2).
@@ -1343,7 +1345,8 @@ HELLO_REJECT    = 0x72    ; No compatible version
   "body": {
     "versions": ["2.0", "1.0"],  ; preferred first
     "profiles": [                ; supported application profiles (optional)
-      {"name": "agentries.cap", "version": "1.0", "typ": 128},
+      {"name": "xyz.agentries.task", "version": "1.0.0", "typ": 128},
+      {"name": "xyz.agentries.negotiation", "version": "1.0.0", "typ": 129},
       {"name": "lineage.knowledge", "version": "0.1.0"}
     ],
     "extensions": ["streaming", "compression"],
@@ -1684,8 +1687,9 @@ On no response within timeout:
 - 0xF1-0xFF: Reserved for future allocation
 
 **Error Codes**:
-- x000-x899: Reserved for AMP core
-- x900-x999: Vendor-specific (no registration)
+- x000-x099: AMP Core (protocol/routing/security/generic client/server)
+- x1xx-x8xx: Registered extension codes (Standard Profiles, Application Profiles); allocation via §17 process
+- x9xx: Vendor-specific (no registration)
 
 **Capability Namespaces**:
 - Defined in RFC 004 (Capability Schema Registry & Compatibility)
