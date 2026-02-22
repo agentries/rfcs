@@ -4,7 +4,7 @@
 **Authors**: Nowa
 **Created**: 2026-02-22
 **Updated**: 2026-02-22
-**Version**: 0.1
+**Version**: 0.2
 
 ---
 
@@ -52,6 +52,7 @@ This RFC defines agent-to-agent responsibility transfer (handoff) semantics for 
    5.3 Accept Flow
    5.4 Reject Flow
    5.5 Complete Flow
+   5.5a Fail Flow
    5.6 Notify Flow
    5.7 Client Veto Flow
    5.8 Cancel Flow
@@ -371,10 +372,11 @@ Processing rules:
 
 Either the source or the target sends `action: "complete"` to signal that the handoff work is done.
 
-Completion sender depends on transfer mode:
-- `full` mode: Target sends `complete` to source.
-- `assist` mode: Either party may send `complete`. Target sends `complete` to return control; source sends `complete` to acknowledge that the assist is finished.
-- `escalate` mode: Target sends `complete` to source.
+Completion sender depends on transfer mode (normative):
+- `full` mode: Target MUST send `complete` to source. Source MUST NOT send `complete`.
+- `assist` mode: Either party MAY send `complete`. Target sends `complete` to return control; source sends `complete` to acknowledge that the assist is finished.
+- `escalate` mode: Target MUST send `complete` to source. Source MUST NOT send `complete`.
+- A `complete` from a disallowed sender for the given mode MUST be rejected with `4001 BAD_REQUEST`.
 
 Complete body MAY include:
 - `result`: Outcome data from the handoff work (opaque to this protocol).
@@ -399,7 +401,11 @@ Fail body MAY include:
 Processing rules:
 - `fail` is valid only from `ACCEPTED` state. Fail from other states MUST be rejected with `4402 INVALID_STATE_TRANSITION`.
 - Upon failure, handoff state transitions to `FAILED` (terminal).
-- For `full` and `escalate` modes, the target sends `fail` to the source. For `assist` mode, the source sends `fail` to the target (since the source retains primary responsibility).
+- Fail sender depends on transfer mode (normative):
+  - `full` mode: Target MUST send `fail` to source. Source MUST NOT send `fail`.
+  - `assist` mode: Source MUST send `fail` to target. Target MUST NOT send `fail`.
+  - `escalate` mode: Target MUST send `fail` to source. Source MUST NOT send `fail`.
+  - A `fail` from a disallowed sender for the given mode MUST be rejected with `4001 BAD_REQUEST`.
 - Source SHOULD notify the client of the failure.
 
 ### 5.6 Notify Flow
@@ -521,7 +527,7 @@ Capability identity:
 Rules:
 - When using CAP path, `CAP_INVOKE` MUST target the capability ID above.
 - `CAP_INVOKE.params` MUST contain one request action body from this RFC with `profile = "xyz.agentries.handoff"` and `profile_v = "1.0.0"`.
-- Allowed request actions in CAP path: `initiate`, `cancel`, `client_veto`, `status_query`.
+- Allowed request actions in CAP path: `initiate`, `cancel`, `client_veto`, `status_query`. Terminal-state actions (`complete`, `fail`) are NOT carried via CAP path; they are delivered as profile-body messages (§5.5, §5.5a). CAP callers observe terminal states via `status_query`/`status` round-trips or by receiving direct profile-body `complete`/`fail` messages.
 - `CAP_RESULT(status="success").result` MUST contain one corresponding response action body from this RFC.
 - If `CAP_INVOKE.body.delegation` is present, validation MUST follow RFC 005 before handoff execution.
 - Invalid/unsupported delegation evidence in CAP handoff path MUST fail with `3004` (RFC 004/005).
@@ -647,8 +653,8 @@ INITIATED
   -> REJECTED              (reject received from target)     [terminal]
   -> CANCELED              (cancel from source/client, or client_veto)  [terminal]
 ACCEPTED
-  -> COMPLETED             (complete received from source or target)  [terminal]
-  -> FAILED                (fail action from source or target)  [terminal]
+  -> COMPLETED             (complete per mode: target for full/escalate, either for assist)  [terminal]
+  -> FAILED                (fail per mode: target for full/escalate, source for assist)  [terminal]
   -> CANCELED              (cancel from source/client)       [terminal]
 REJECTED / COMPLETED / FAILED / CANCELED
   -> TERMINAL              (no further transitions allowed)
@@ -980,3 +986,4 @@ Expected:
 | Date | Version | Author | Changes |
 |------|---------|--------|---------|
 | 2026-02-22 | 0.1 | Nowa | Initial draft: handoff lifecycle (initiate/accept/reject/complete/cancel/notify/veto/status), three transfer modes, context packaging model, client notification and veto, state machine, error codes (44xx range), CDDL schemas, CAP interop profile, and 10 minimal test vectors |
+| 2026-02-22 | 0.2 | Nowa | Added `fail` action with mode-specific sender rules (§5.5a), CDDL body, direction matrix entries, and role profile MTI. Strengthened complete/fail sender constraints to normative MUST per mode. Clarified CAP interop terminal-state observability. Added test vectors A.11 (fail positive) and A.12 (fail invalid state negative). Added RFC 008/009 to Related dependencies. |
