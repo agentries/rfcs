@@ -24,13 +24,20 @@ Note: **Accepted** indicates implementation-ready specifications (byte-accurate 
 ## Current Conformance Target
 
 Current program target is `Draft` interoperability readiness.
+
+### AMP Full Gate (RFC 001-011)
+
 Design-requirement evaluation for RFC `001-011` in this cycle is based on `Draft` gate completion.
-Current-cycle design-requirement verdict for RFC `001-011`: `SATISFIED` (see `conformance/2026-02-07-draft-v1/GATE-STATUS.md`).
-In this cycle, a failing `Accepted` gate check is expected and does not block RFC `001-011` design-requirement closure.
+Current-cycle design-requirement verdict: `SATISFIED` (see `conformance/2026-02-07-draft-v1/GATE-STATUS.md`).
+In this cycle, a failing `Accepted` gate check is expected and does not block design-requirement closure.
 Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validate-design-requirements.sh conformance/2026-02-07-draft-v1/reports`.
 `Accepted/Implementation-Ready` is deferred until the conformance suite includes at least two independent `full-stack-pass` reports under `conformance/2026-02-07-draft-v1/reports`.
 
-**RFC 012-014 (Standard Profiles)**: These RFCs are at initial Draft. A conformance suite is defined at `conformance/amp-standard-profiles-012-014-draft-v1/` with a single `amp-standard-profiles-012-014` profile covering all 39 Appendix A vectors. Draft gate: `NOT SATISFIED` (see `conformance/amp-standard-profiles-012-014-draft-v1/GATE-STATUS.md`).
+### Standard Profiles Gate (RFC 012-014)
+
+These RFCs are at initial Draft. A conformance suite is defined at `conformance/amp-standard-profiles-012-014-draft-v1/` with a single `amp-standard-profiles-012-014` profile covering all 39 Appendix A vectors.
+Draft gate: `NOT SATISFIED` (see `conformance/amp-standard-profiles-012-014-draft-v1/GATE-STATUS.md`).
+Current-cycle completion check command: `conformance/amp-standard-profiles-012-014-draft-v1/validate-design-requirements.sh conformance/amp-standard-profiles-012-014-draft-v1/reports`.
 
 ## Current RFCs
 
