@@ -29,7 +29,7 @@
 
 ## Abstract
 
-This RFC defines agent-to-agent responsibility transfer (handoff) semantics for AMP. It standardizes initiation, acceptance, rejection, context packaging, client notification, completion, cancellation, and status query flows for transferring ongoing work from one agent (source) to another agent (target). Context packages carry optional task snapshots (RFC 012) and conversation history for continuity. The protocol supports three transfer modes: full (complete handoff), assist (temporary delegation), and escalate (capability escalation). An optional client notification and veto mechanism provides end-user visibility and control over transfers.
+This RFC defines agent-to-agent responsibility transfer (handoff) semantics for AMP. It standardizes initiation, acceptance, rejection, context packaging, client notification, completion, failure, cancellation, and status query flows for transferring ongoing work from one agent (source) to another agent (target). Context packages carry optional task snapshots (RFC 012) and conversation history for continuity. The protocol supports three transfer modes: full (complete handoff), assist (temporary delegation), and escalate (capability escalation). An optional client notification and veto mechanism provides end-user visibility and control over transfers.
 
 ---
 
@@ -79,7 +79,7 @@ Changelog
 Agents operating in multi-agent environments frequently need to transfer responsibility for ongoing work. A customer service agent may need to escalate to a specialist; a general-purpose agent may need temporary help from a domain expert; a coordinating agent may need to hand off an entire task to a more capable peer. Without standardized handoff semantics, these transfers are ad-hoc and fragile: context is lost during transfer, clients are confused about who to contact, state transitions are ambiguous, and there is no structured way to package and transfer working state between agents.
 
 This RFC defines:
-- Signed handoff lifecycle bodies for initiate, accept, reject, complete, notify, client_veto, cancel, status_query, and status actions.
+- Signed handoff lifecycle bodies for initiate, accept, reject, complete, fail, notify, client_veto, cancel, status_query, and status actions.
 - A structured context packaging model with optional task snapshot (RFC 012) and conversation history.
 - Three transfer modes (full, assist, escalate) with distinct lifecycle semantics.
 - Client notification and optional veto mechanism for end-user visibility and control.
