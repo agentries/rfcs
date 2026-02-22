@@ -30,7 +30,7 @@ In this cycle, a failing `Accepted` gate check is expected and does not block RF
 Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validate-design-requirements.sh conformance/2026-02-07-draft-v1/reports`.
 `Accepted/Implementation-Ready` is deferred until the conformance suite includes at least two independent `full-stack-pass` reports under `conformance/2026-02-07-draft-v1/reports`.
 
-**RFC 012-014 (Standard Profiles)**: These RFCs are at initial Draft (v0.1) and are NOT yet included in the conformance gate. A separate gate profile (e.g., `amp-standard-profiles-012-014`) will be defined once these specifications stabilize beyond initial draft.
+**RFC 012-014 (Standard Profiles)**: These RFCs are at initial Draft and are NOT yet included in the conformance gate. A separate gate profile (e.g., `amp-standard-profiles-012-014`) will be defined once these specifications stabilize beyond initial draft.
 
 ## Current RFCs
 
@@ -49,7 +49,7 @@ Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validat
 | 011 | [Multi-Agent Coordination & Group Messaging](011-multi-agent-coordination.md) | Draft v0.6 | Nowa | 2026-02-10 |
 | 012 | [Task Protocol](012-task-protocol.md) | Draft v0.1 | Nowa | 2026-02-22 |
 | 013 | [Negotiation Protocol](013-negotiation-protocol.md) | Draft v0.1 | Nowa | 2026-02-22 |
-| 014 | [Handoff Protocol](014-handoff-protocol.md) | Draft v0.1 | Nowa | 2026-02-22 |
+| 014 | [Handoff Protocol](014-handoff-protocol.md) | Draft v0.2 | Nowa | 2026-02-22 |
 
 ## Supporting Documents
 
