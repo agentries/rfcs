@@ -133,7 +133,7 @@ An implementation is conformant only if it:
 - MUST send `fail` when `assist` mode handoff cannot be completed.
 
 `Target Agent Profile`:
-- MUST support `accept`, `reject`, `fail`, and `status_query` actions.
+- MUST support `accept`, `reject`, `complete`, `fail`, and `status_query` actions.
 - MUST validate the context package before accepting a handoff.
 - MUST send `complete` when handoff work is finished (for `full` and `escalate` modes).
 - MUST send `fail` when handoff work cannot be completed (for `full` and `escalate` modes).
