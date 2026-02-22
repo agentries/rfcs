@@ -212,6 +212,7 @@ State constraints:
 - `accept` is valid only from `INITIATED`.
 - `reject` is valid only from `INITIATED`.
 - `complete` is valid only from `ACCEPTED`.
+- `fail` is valid only from `ACCEPTED`.
 - `cancel` is valid from `INITIATED` or `ACCEPTED`.
 - `client_veto` is valid only from `INITIATED`.
 - Terminal states (`REJECTED`, `COMPLETED`, `FAILED`, `CANCELED`) are irreversible.
@@ -382,6 +383,23 @@ Processing rules:
 - Upon completion, handoff state transitions to `COMPLETED` (terminal).
 - Source SHOULD notify the client of completion.
 
+### 5.5a Fail Flow
+
+The source or target sends `action: "fail"` to signal that the handoff cannot be completed due to an error during execution.
+
+Fail body MUST include:
+- `error_code`: Numeric error code indicating the failure reason.
+
+Fail body MAY include:
+- `message`: Human-readable failure description.
+- `details`: Structured error details (opaque to this protocol).
+
+Processing rules:
+- `fail` is valid only from `ACCEPTED` state. Fail from other states MUST be rejected with `4402 INVALID_STATE_TRANSITION`.
+- Upon failure, handoff state transitions to `FAILED` (terminal).
+- For `full` and `escalate` modes, the target sends `fail` to the source. For `assist` mode, the source sends `fail` to the target (since the source retains primary responsibility).
+- Source SHOULD notify the client of the failure.
+
 ### 5.6 Notify Flow
 
 The source agent sends `action: "notify"` to the client agent to inform them of the handoff.
@@ -458,6 +476,7 @@ The following matrix is normative:
 | `accept` | target -> source | (none required) | N/A |
 | `reject` | target -> source | (none required) | N/A |
 | `complete` | source or target -> counterpart | (none required) | N/A |
+| `fail` | source or target -> counterpart | (none required) | N/A |
 | `notify` | source -> client | `client_veto` (optional) | veto `reply_to` MUST reference `notify` message `id` |
 | `client_veto` | client -> source | (none required) | N/A |
 | `cancel` (source-initiated) | source -> target | (none required) | N/A |
@@ -515,7 +534,7 @@ Rules:
 
 ```cddl
 handoff-action =
-  "initiate" / "accept" / "reject" / "complete" /
+  "initiate" / "accept" / "reject" / "complete" / "fail" /
   "notify" / "client_veto" / "cancel" /
   "status_query" / "status"
 
@@ -548,6 +567,14 @@ complete-body = {
   "action": "complete",
   ? "result": any,
   ? "return_context": context-package
+}
+
+fail-body = {
+  handoff-base,
+  "action": "fail",
+  "error_code": uint,
+  ? "message": tstr,
+  ? "details": any
 }
 
 notify-body = {
@@ -617,7 +644,7 @@ INITIATED
   -> CANCELED              (cancel from source/client, or client_veto)  [terminal]
 ACCEPTED
   -> COMPLETED             (complete received from source or target)  [terminal]
-  -> FAILED                (internal failure during handoff execution)  [terminal]
+  -> FAILED                (fail action from source or target)  [terminal]
   -> CANCELED              (cancel from source/client)       [terminal]
 REJECTED / COMPLETED / FAILED / CANCELED
   -> TERMINAL              (no further transitions allowed)
