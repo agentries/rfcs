@@ -582,8 +582,7 @@ HELLO profile descriptor example:
   "version": "1.0.0",
   "typ": 129,
   "version_range": ">=1.0.0 <2.0.0",
-  "required": false,
-  "depends": []
+  "required": false
 }
 ```
 

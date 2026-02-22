@@ -552,7 +552,10 @@ Rules:
 - Invalid/unsupported delegation evidence in the CAP task path MUST fail with `3004 DELEGATION_INVALID` (RFC 004/005).
 - Section 5.8a profile-carriage direction rules MUST NOT be applied to CAP envelope types. CAP carriage uses `CAP_INVOKE`/`CAP_RESULT` semantics.
 - Providers supporting this capability MUST publish an RFC 004-compliant descriptor for `xyz.agentries.task.workflow:1.0.0`.
+- Descriptor/schema integrity verification (hash/signature/trust profile behavior) MUST follow RFC 004 Sections 4.2 and 5.2 before schema validation/execution.
 - Descriptor input schema MUST correspond to `app-cap-invoke-params`; success result schema MUST correspond to `app-cap-result-success`.
+- Session context source-of-truth in CAP path is RFC 004 envelope extension (`CAP_INVOKE.body.session`, `CAP_RESULT.body.session`) with semantics governed by RFC 006.
+- `CAP_INVOKE.params.session` and `CAP_RESULT.result.session` MAY exist for payload-level compatibility, but if both payload and envelope session context are present, they MUST be semantically equivalent; mismatch MUST fail with `4001`.
 - Pre-execution rejection in CAP path (validation/authorization/compatibility/schema) MUST return AMP `ERROR` per RFC 004 Section 7.2.
 - Only post-accept execution failures in CAP path MAY return `CAP_RESULT(status="error")`.
 
@@ -786,14 +789,18 @@ Implementations MUST validate state transitions before applying them. Invalid tr
 This RFC reuses the RFC 001 error model and introduces task-specific business codes in the `42xx` range.
 
 Deterministic precedence (evaluated in order):
-1. Parse/shape/type failures (missing required fields, invalid CBOR) -> `1001 INVALID_MESSAGE`.
-2. Profile/typ mismatch (`typ = 0x80` but `body.profile` not `"xyz.agentries.task"`) -> `4001 BAD_REQUEST`.
-3. Unknown profile (message via `typ = 0xF0` with unrecognized `body.profile`) -> `4005 UNKNOWN_PROFILE`.
-4. Unsupported `profile_v` -> `4006 PROFILE_VERSION_UNSUPPORTED`.
-5. Authorization identity/policy failure -> `3001 UNAUTHORIZED`.
-6. Action/typ direction mismatch or malformed correlation -> `4001 BAD_REQUEST`.
-7. Task semantic/state failures -> `42xx`.
-8. Transient backend failures -> `500x`.
+1. Parse/shape/type failures (missing required fields, invalid CBOR) -> `1001`.
+2. Profile/typ mismatch (`typ = 0x80` but `body.profile` not `"xyz.agentries.task"`) -> `4001`.
+3. Unknown profile (message via `typ = 0xF0` with unrecognized `body.profile`) -> `4005`.
+4. Unsupported `profile_v` -> `4006`.
+5. Authorization identity/policy failure -> `3001`.
+6. CAP pre-resolution/coarse policy denial -> `3001` (RFC 004 validation order).
+7. CAP delegation evidence failure (after coarse auth checks) -> `3004`.
+8. CAP descriptor signature/trust-profile verification failure -> `3001`.
+9. Task semantic/request-shape conflicts (direction mismatch, malformed correlation) -> `4001`.
+10. Task state/business failures -> `42xx`.
+11. CAP descriptor/schema artifact unavailable or integrity source unavailable -> `5002`.
+12. Transient backend failures -> `500x`.
 
 | Condition | Code | Name | Retry |
 |-----------|------|------|-------|
@@ -801,14 +808,19 @@ Deterministic precedence (evaluated in order):
 | Unsupported `profile_v` | `4006` | PROFILE_VERSION_UNSUPPORTED | No |
 | Unknown profile (`body.profile` not recognized) | `4005` | UNKNOWN_PROFILE | No |
 | Unauthorized task actor (sender not authorized for this task) | `3001` | UNAUTHORIZED | No |
+| CAP pre-resolution/coarse policy denial | `3001` | UNAUTHORIZED | No |
+| CAP delegation evidence invalid | `3004` | DELEGATION_INVALID | No |
+| CAP descriptor signature required but missing/invalid under trust profile | `3001` | UNAUTHORIZED | No |
 | Task action/typ direction mismatch | `4001` | BAD_REQUEST | No |
 | Unsolicited response (missing/invalid `reply_to`) | `4001` | BAD_REQUEST | No |
 | Conflicting retry payload for same `op_key` | `4001` | BAD_REQUEST | No |
+| CAP session context mismatch (envelope vs payload) | `4001` | BAD_REQUEST | No |
 | Task not found (`task_id` unknown) | `4201` | TASK_NOT_FOUND | No |
 | Invalid state transition (action not valid for current state) | `4202` | INVALID_STATE_TRANSITION | No |
 | Sub-task limit exceeded (implementation-defined maximum) | `4203` | SUBTASK_LIMIT_EXCEEDED | No |
 | Input request expired (`deadline` passed) | `4204` | INPUT_REQUEST_EXPIRED | No |
 | Unknown task action (`action` value not recognized) | `4205` | UNKNOWN_TASK_ACTION | No |
+| CAP descriptor/schema artifact missing, unreadable, or integrity source unavailable | `5002` | UNAVAILABLE | Yes |
 | Internal task engine failure | `5001` | INTERNAL_ERROR | Yes |
 | Task worker unavailable | `5002` | UNAVAILABLE | Yes |
 

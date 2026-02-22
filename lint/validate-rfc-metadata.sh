@@ -10,10 +10,21 @@ set -euo pipefail
 #   3. Version sync: RFC header version matches README.md table (with v prefix)
 #   4. Status sync: RFC header status matches README.md table
 #   5. Date format: Created/Updated are valid YYYY-MM-DD
+#   6. Git date sync (optional, --check-git): Updated >= last git commit date
 #
 # Exit 0 = all pass, Exit 1 = any fail.
 
-repo_root="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
+check_git=false
+repo_root=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --check-git) check_git=true ;;
+    *) repo_root="$arg" ;;
+  esac
+done
+
+repo_root="${repo_root:-$(cd "$(dirname "$0")/.." && pwd)}"
 readme="$repo_root/README.md"
 errors=0
 
@@ -112,6 +123,15 @@ for rfc_file in "$repo_root"/[0-9][0-9][0-9]-*.md; do
   if [ -n "$hdr_version" ] && [ -n "$readme_version" ]; then
     if [ "$hdr_version" != "$readme_version" ]; then
       echo "error: $filename: version mismatch: header='$hdr_version' readme='$readme_version'" >&2
+      errors=$((errors + 1))
+    fi
+  fi
+
+  # --- Check 6: Git date sync (optional) ---
+  if [ "$check_git" = true ] && [ -n "$hdr_updated" ] && command -v git >/dev/null 2>&1; then
+    git_date="$(git -C "$repo_root" log -1 --format=%cs -- "$rfc_file" 2>/dev/null || true)"
+    if [ -n "$git_date" ] && [ "$hdr_updated" \< "$git_date" ]; then
+      echo "error: $filename: Updated header ($hdr_updated) is older than last git commit ($git_date)" >&2
       errors=$((errors + 1))
     fi
   fi

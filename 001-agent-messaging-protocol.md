@@ -678,7 +678,7 @@ profile-descriptor = {
   ? "typ": uint,             ; registered type code (Standard Profiles only; omit for Private)
   ? "version_range": tstr,   ; semver range string (e.g., ">=1.0.0 <2.0.0"); see §13.3
   ? "required": bool,        ; true = sender will not proceed without this profile (default false)
-  ? "depends": [+ tstr]      ; profile names this profile depends on (e.g., ["org.amp.task"])
+  ? "depends": [+ tstr]      ; profile names this profile depends on (e.g., ["xyz.agentries.task"])
 }
 
 hello-ack-body = {
