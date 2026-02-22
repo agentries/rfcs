@@ -111,7 +111,7 @@ Conformance tiers:
    Application-level protocols built on AMP Core that go through registration and version governance (§17). Each Standard Profile gets one registered type code in `0x80-0xEF` and defines its own action vocabulary, body schemas, message flows, and security requirements. `AMP Full` (§5-§7, §11-§12, and companion RFCs 004-011) is the built-in Standard Profile for the Agentries ecosystem.
 
 3. **AMP Private Profiles** (no interoperability promise):
-   Experimental or vendor-specific protocols using `typ = 0xF0`. Private Profiles MUST NOT break AMP Core semantics but carry no cross-project interoperability guarantee. Private Profiles MAY graduate to Standard Profiles via the registration process.
+   Experimental or vendor-specific protocols using `typ = 0xF0`. Private Profiles MUST NOT break AMP Core semantics but carry no cross-project interoperability guarantee. Private Profiles MAY graduate to Standard Profiles via the registration process and HELLO-negotiated migration (see §14.2).
 
 **Profile extensibility rules** (normative):
 
@@ -520,20 +520,10 @@ PRIVATE_PROFILE   = 0xF0    ; Private/experimental profile message
 
 **Profile Body Contracts**:
 
-Standard Profile messages (`typ` 0x80-0xEF) MUST use the following body structure:
+Both Standard and Private Profile messages use the same body structure:
 
 ```cddl
-standard-profile-body = {
-  "action": tstr,            ; profile-defined action verb
-  "profile_v": semver,       ; profile version (semver)
-  * tstr => any              ; profile-specific payload fields
-}
-```
-
-Private Profile messages (`typ` 0xF0) MUST use the following body structure:
-
-```cddl
-private-profile-body = {
+profile-body = {
   "profile": tstr,           ; profile name (reverse-domain, e.g., "com.example.myapp")
   "action": tstr,            ; profile-defined action verb
   "profile_v": semver,       ; profile version (semver)
@@ -541,7 +531,9 @@ private-profile-body = {
 }
 ```
 
-All profile body fields (`action`, `profile_v`, `profile`) are inside signed `body` and therefore integrity-protected. Relay and intermediary nodes MUST NOT use these fields for routing decisions (see §1.5 rule 4).
+`body.profile` is REQUIRED for both Standard and Private Profile messages. For Standard Profiles, `typ` already identifies the profile for fast dispatch; `body.profile` provides self-description for debugging, auditing, and dual-stack migration (see §14.2). Receivers MUST validate that `body.profile` matches the expected profile for the given `typ` code and SHOULD reject mismatches with `4001 BAD_REQUEST`.
+
+All profile body fields (`profile`, `action`, `profile_v`) are inside signed `body` and therefore integrity-protected. Relay and intermediary nodes MUST NOT use these fields for routing decisions (see §1.5 rule 4).
 
 ### 4.4 Message Body Schemas (CDDL)
 
@@ -679,7 +671,8 @@ hello-body = {
 
 profile-descriptor = {
   "name": tstr,              ; profile name (e.g., "lineage.knowledge")
-  "version": semver          ; supported profile version
+  "version": semver,         ; supported profile version
+  ? "typ": uint              ; registered type code (Standard Profiles only; omit for Private)
 }
 
 hello-ack-body = {
@@ -1339,7 +1332,7 @@ HELLO_REJECT    = 0x72    ; No compatible version
   "body": {
     "versions": ["2.0", "1.0"],  ; preferred first
     "profiles": [                ; supported application profiles (optional)
-      {"name": "agentries.cap", "version": "1.0"},
+      {"name": "agentries.cap", "version": "1.0", "typ": 128},
       {"name": "lineage.knowledge", "version": "0.1.0"}
     ],
     "extensions": ["streaming", "compression"],
@@ -1352,6 +1345,11 @@ HELLO_REJECT    = 0x72    ; No compatible version
 ```
 
 **Profile negotiation**: `profiles` is OPTIONAL. If present, peers SHOULD use the intersection of declared profiles to determine compatible application semantics. An empty intersection does not prevent AMP Core communication — it only indicates no shared application profiles.
+
+**`typ` selection rule**: When sending a profile message, the sender MUST choose `typ` based on the peer's HELLO declaration:
+- If the peer declared the profile with a `typ` field → use that registered type code.
+- If the peer declared the profile without `typ`, or no HELLO was exchanged → use `0xF0` (Private Profile).
+- Receivers supporting a Standard Profile MUST accept messages for that profile via either its registered `typ` OR `typ = 0xF0` with matching `body.profile`. This dual-accept rule enables non-breaking migration from Private to Standard (see §14.2).
 
 ### 13.4 Backward Compatibility
 
@@ -1406,6 +1404,29 @@ Hard constraints:
 - MUST NOT require relay to parse profile message bodies for routing (see §1.5 rule 4).
 - MUST declare authorization model and abuse-prevention requirements for Standard Profile registration (see §1.5 rule 5).
 - MAY coexist with AMP Full and other profiles — an agent can support multiple profiles simultaneously.
+
+#### 14.2.1 Private-to-Standard Migration Protocol
+
+When a Private Profile graduates to a Standard Profile, the migration is HELLO-negotiated and non-breaking:
+
+```
+Phase 1 — Private only (pre-registration):
+  Sender: typ=0xF0, body.profile="example.knowledge"
+  HELLO:  {"name": "example.knowledge", "version": "0.9.0"}
+
+Phase 2 — Dual-stack (post-registration, transition):
+  Standard typ=0x80 assigned.
+  HELLO:  {"name": "example.knowledge", "version": "1.0", "typ": 128}
+  Sender: if peer declared typ → send typ=0x80
+          if peer did not    → send typ=0xF0 (fallback)
+  Receiver: accepts BOTH typ=0x80 and typ=0xF0 with matching body.profile
+
+Phase 3 — Standard only (convergence):
+  All peers declare typ in HELLO.
+  typ=0xF0 fallback MAY be deprecated for this profile.
+```
+
+This allows each peer to upgrade independently — no coordinated cutover required.
 
 ---
 
@@ -1476,6 +1497,8 @@ Hard constraints:
 | 4002 | CAPABILITY_NOT_FOUND | Requested capability not available | No |
 | 4003 | VERSION_MISMATCH | Capability version not supported | No |
 | 4004 | SCHEMA_VIOLATION | Input doesn't match schema | No |
+| 4005 | UNKNOWN_PROFILE | Profile name (`body.profile`) not recognized by recipient | No |
+| 4006 | PROFILE_VERSION_UNSUPPORTED | Profile version (`body.profile_v`) not supported; recipient MAY include supported versions in `details` | No |
 
 **Server Errors (5xxx)**:
 | Code | Name | Description | Retry |
@@ -2073,4 +2096,4 @@ Versioning note: public version numbers were reset on 2026-02-06 for external pu
 | 2026-02-07 | 0.42 | 5.31 | Nowa | Added conformance suite publication location and governance requirements for Accepted/Implementation-Ready gate auditability |
 | 2026-02-07 | 0.43 | 5.32 | Nowa | Added batch and document MIME test vectors (`A.10`/`A.11`) to close R10/R19 gate coverage, added optional MIME diversity vector (`A.12`), and updated Full coverage matrix mapping |
 | 2026-02-10 | 0.44 | 5.33 | Nowa | Aligned interop gate profile naming to `amp-full-stack-001-011`, synchronized optional-extension scope to RFC 007-011, and updated full-stack coverage matrix vectors accordingly |
-| 2026-02-22 | 0.45 | 5.34 | Nowa | Defined three-tier conformance model (Core / Standard Profile / Private Profile) with 5 normative extensibility rules in §1.5. Introduced one-code-per-profile type allocation (0x80-0xEF Standard, 0xF0 Private) with `body.action` dispatch in §4.3. Added `profile-descriptor` to HELLO CDDL and `profiles` negotiation to §13.3. Added profile body CDDL contracts (standard-profile-body, private-profile-body). Updated §14.2 with adoption path and hard constraints. Updated §17 with Standard Profile registration requirements. Renamed §9 to "Discovery & Contactability". Separated infrastructure vs application problems in §1.3. |
+| 2026-02-22 | 0.45 | 5.34 | Nowa | Defined three-tier conformance model (Core / Standard Profile / Private Profile) with 5 normative extensibility rules in §1.5. Introduced one-code-per-profile type allocation (0x80-0xEF Standard, 0xF0 Private) with `body.action` dispatch in §4.3. Unified profile body CDDL (`profile-body`): both Standard and Private carry `body.profile` for self-description, debugging, and dual-stack migration. Added `profile-descriptor` with optional `typ` field to HELLO CDDL; defined typ selection rule and dual-accept migration in §13.3. Added §14.2.1 Private-to-Standard migration protocol (HELLO-negotiated, non-breaking). Added profile error codes (4005 UNKNOWN_PROFILE, 4006 PROFILE_VERSION_UNSUPPORTED) to §15.3. Updated §17 with Standard Profile registration requirements. Renamed §9 to "Discovery & Contactability". Separated infrastructure vs application problems in §1.3. |
