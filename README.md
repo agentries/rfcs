@@ -188,6 +188,10 @@ Current-cycle completion check command: `conformance/2026-02-07-draft-v1/validat
 6. **Interoperable**: Optional bridges to A2A, MCP ecosystems
 7. **Extensible**: Domain-specific application protocols build on AMP Core via registered type codes and application profiles
 
+## License
+
+This repository is licensed under the [Apache License 2.0](LICENSE). This applies to all specifications, code examples, and conformance artifacts. The Apache 2.0 license includes an explicit patent grant, ensuring that anyone implementing AMP has clear legal standing.
+
 ## Contributing
 
 1. Fork this repo
