@@ -120,7 +120,7 @@ Conformance tiers:
 1. **Type code governance**: `typ` identifies the semantic category (one code per profile in the extension range). Fine-grained actions MUST be carried in `body.action`. This prevents type code exhaustion while keeping protocol-level dispatch efficient.
 2. **Profile discoverability**: Implementations supporting Standard or Private Profiles SHOULD declare `profiles` in HELLO (§13) so peers discover compatibility at connection time, not after message failure.
 3. **Profile minimum specification**: Every Standard Profile registration (§17) MUST include: profile name, version, allocated type code, action vocabulary, body CDDL schemas, message flows, and security/authorization requirements.
-4. **Relay neutrality**: Relays (RFC 003) MUST NOT parse or interpret profile message bodies for routing decisions. Topic-based or content-based routing MUST be implemented at the application layer (e.g., via a broker agent), not by extending relay core behavior.
+4. **Relay neutrality**: Under Relay Core Profile (RFC 003), relays MUST NOT parse or interpret profile message bodies for routing decisions. Topic-based or content-based routing MUST be implemented at the application layer (e.g., via a broker agent), not by extending relay core behavior. Future companion RFCs MAY define relay extension profiles that relax this constraint; such profiles MUST be additive and MUST NOT alter neutrality guarantees for non-participating implementations (see RFC 003 §2).
 5. **Security boundary**: AMP Core guarantees envelope integrity, signature verification, and transport security. Each Standard Profile MUST declare its own authorization model and abuse-prevention requirements; profiles that lack explicit security requirements MUST NOT be registered in the Standard Profile range.
 
 `AMP Full` delegated-execution baseline:
@@ -253,12 +253,12 @@ AMP adopts a message-centric three-layer architecture (inspired by MTProto):
 │  (Envelope, deterministic CBOR,                     │
 │   signature/encryption, ACK/ERROR)                  │
 ├─────────────────────────────────────────────────────┤
-│  Layer 1: Transport Bindings                        │
-│  (HTTP, WebSocket, TCP, Relay/MQ)                   │
+│  Layer 1: Transport & Delivery                      │
+│  (HTTP, WebSocket, TCP, Relay/Store-and-Forward)    │
 └─────────────────────────────────────────────────────┘
 ```
 
-### 3.1 Layer 1: Transport Bindings
+### 3.1 Layer 1: Transport & Delivery
 
 Transport-agnostic design:
 
@@ -1374,7 +1374,7 @@ HELLO_REJECT    = 0x72    ; No compatible version
 **Profile matching algorithm**: When processing HELLO `profiles`, the responder MUST apply the following steps for each initiator profile descriptor:
 
 1. **Name lookup**: Find the profile by `name` in the responder's supported profile set. If not found, set `matched = false`.
-2. **Version intersection**: If the initiator provides `version_range`, compute the intersection of the initiator's range with the responder's supported version set. If no intersection exists, set `matched = false`. If the initiator provides only `version`, the responder MUST match if it supports any version with the same major version (semver-compatible). The `selected_version` is the highest mutually supported version.
+2. **Version intersection**: If the initiator provides `version_range`, compute the intersection of the initiator's range with the responder's supported version set. If no intersection exists, set `matched = false`. If the initiator provides only `version` (without `version_range`), the responder MUST require an exact match on that version. Semver-compatible (same-major) matching is only permitted when `version_range` is explicitly declared. The `selected_version` is the highest mutually supported version.
 3. **Dependency check**: If the initiator's descriptor includes `depends`, verify that every listed profile name is also matched (from this same HELLO negotiation). If any dependency is unmatched, set `matched = false`.
 4. **Type code agreement**: If both sides declare `typ` for the profile, they MUST agree. If only one side declares `typ`, the declared value is used. If neither declares `typ`, the profile uses `0xF0`. The agreed `typ` is returned in `profile_status`.
 5. **Required-profile enforcement**: After all profiles are evaluated, if any descriptor with `required = true` has `matched = false`, the responder MUST send `HELLO_REJECT` with reason indicating the unsatisfied required profile(s).

@@ -44,16 +44,16 @@ Current-cycle completion check command: `conformance/amp-standard-profiles-012-0
 | RFC | Title | Status | Author | Last Updated |
 |-----|-------|--------|--------|--------------|
 | 001 | [Agent Messaging Protocol (AMP Full Entry + Core Subset)](001-agent-messaging-protocol.md) | Draft v0.46 | Ryan Cooper, Jason Apple Huang | 2026-02-22 |
-| 002 | [Transport Bindings (TCP-first, HTTP/WS mappings)](002-transport-bindings.md) | Draft v0.16 | Ryan Cooper, Nowa | 2026-02-07 |
-| 003 | [Relay & Store-and-Forward](003-relay-store-and-forward.md) | Draft v0.61 | Nowa | 2026-02-07 |
-| 004 | [Capability Schema Registry & Compatibility](004-capability-schema-registry.md) | Draft v0.12 | Ryan Cooper, Nowa | 2026-02-07 |
-| 005 | [Delegation Credentials & Authorization](005-delegation-authorization.md) | Draft v0.34 | Ryan Cooper, Nowa | 2026-02-07 |
-| 006 | [Session Protocol (State + Recovery)](006-session-protocol.md) | Draft v0.9 (coupled MTI + optional independent thread profile + explicit session_scope marker) | Ryan Cooper, Nowa | 2026-02-07 |
-| 007 | [Agent Payment Protocol](007-agent-payment-protocol.md) | Draft v0.34 (CAP precedence + session source-of-truth + split descriptor failure vectors + byte checks) | Ryan Cooper, Nowa | 2026-02-07 |
-| 008 | [Agent Discovery & Directory](008-agent-discovery-directory.md) | Draft v0.4 | Nowa | 2026-02-10 |
-| 009 | [Reputation & Trust Signals](009-reputation-trust-signals.md) | Draft v0.11 (session/CAP negative vectors + 3004 byte-level checks) | Nowa | 2026-02-10 |
-| 010 | [Observability & Evaluation Telemetry](010-observability-evaluation-telemetry.md) | Draft v0.5 | Nowa | 2026-02-10 |
-| 011 | [Multi-Agent Coordination & Group Messaging](011-multi-agent-coordination.md) | Draft v0.6 | Nowa | 2026-02-10 |
+| 002 | [Transport Bindings (TCP-first, HTTP/WS mappings)](002-transport-bindings.md) | Draft v0.16 | Ryan Cooper, Nowa | 2026-02-22 |
+| 003 | [Relay & Store-and-Forward](003-relay-store-and-forward.md) | Draft v0.61 | Nowa | 2026-02-22 |
+| 004 | [Capability Schema Registry & Compatibility](004-capability-schema-registry.md) | Draft v0.12 | Ryan Cooper, Nowa | 2026-02-22 |
+| 005 | [Delegation Credentials & Authorization](005-delegation-authorization.md) | Draft v0.34 | Ryan Cooper, Nowa | 2026-02-22 |
+| 006 | [Session Protocol (State + Recovery)](006-session-protocol.md) | Draft v0.9 (coupled MTI + optional independent thread profile + explicit session_scope marker) | Ryan Cooper, Nowa | 2026-02-22 |
+| 007 | [Agent Payment Protocol](007-agent-payment-protocol.md) | Draft v0.34 (CAP precedence + session source-of-truth + split descriptor failure vectors + byte checks) | Ryan Cooper, Nowa | 2026-02-22 |
+| 008 | [Agent Discovery & Directory](008-agent-discovery-directory.md) | Draft v0.4 | Nowa | 2026-02-22 |
+| 009 | [Reputation & Trust Signals](009-reputation-trust-signals.md) | Draft v0.11 (session/CAP negative vectors + 3004 byte-level checks) | Nowa | 2026-02-22 |
+| 010 | [Observability & Evaluation Telemetry](010-observability-evaluation-telemetry.md) | Draft v0.5 | Nowa | 2026-02-22 |
+| 011 | [Multi-Agent Coordination & Group Messaging](011-multi-agent-coordination.md) | Draft v0.6 | Nowa | 2026-02-22 |
 | 012 | [Task Protocol](012-task-protocol.md) | Draft v0.1 | Nowa | 2026-02-22 |
 | 013 | [Negotiation Protocol](013-negotiation-protocol.md) | Draft v0.1 | Nowa | 2026-02-22 |
 | 014 | [Handoff Protocol](014-handoff-protocol.md) | Draft v0.2 | Nowa | 2026-02-22 |

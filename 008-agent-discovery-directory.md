@@ -3,7 +3,7 @@
 **Status**: Draft
 **Authors**: Nowa
 **Created**: 2026-02-06
-**Updated**: 2026-02-10
+**Updated**: 2026-02-22
 **Version**: 0.4
 
 ---
